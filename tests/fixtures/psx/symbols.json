@@ -1,0 +1,41 @@
+[
+ {
+  "symbol": "AKBLTFC6",
+  "name": "Askari Bank(TFC6)",
+  "sectorName": "BILLS AND BONDS",
+  "isETF": false,
+  "isDebt": true
+ },
+ {
+  "symbol": "ABL",
+  "name": "Allied Bank Limited",
+  "sectorName": "COMMERCIAL BANKS",
+  "isETF": false,
+  "isDebt": false,
+  "isGEM": false
+ },
+ {
+  "symbol": "ACIETF",
+  "name": "Alfalah Consumer Index (ETF)",
+  "sectorName": "EXCHANGE TRADED FUNDS",
+  "isETF": true,
+  "isDebt": false,
+  "isGEM": false
+ },
+ {
+  "symbol": "EFERT",
+  "name": "Engro Fertilizers Limited",
+  "sectorName": "FERTILIZER",
+  "isETF": false,
+  "isDebt": false,
+  "isGEM": false
+ },
+ {
+  "symbol": "LUCK",
+  "name": "Lucky Cement Limited",
+  "sectorName": "CEMENT",
+  "isETF": false,
+  "isDebt": false,
+  "isGEM": false
+ }
+]

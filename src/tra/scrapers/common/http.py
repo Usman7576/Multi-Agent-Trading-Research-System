@@ -45,37 +45,71 @@ class HttpClient:
         self._last_request = 0.0
 
     def get_bytes(self, url: str, params: dict[str, str] | None = None, use_cache: bool = True) -> bytes:
-        cache_path = self._cache_path(url, params) if use_cache else None
+        return self.request("GET", url, params=params, use_cache=use_cache)
+
+    def get_text(self, url: str, params: dict[str, str] | None = None, use_cache: bool = True) -> str:
+        return self.get_bytes(url, params, use_cache).decode("utf-8", errors="replace")
+
+    def post_text(
+        self,
+        url: str,
+        data: dict[str, str],
+        headers: dict[str, str] | None = None,
+        use_cache: bool = True,
+    ) -> str:
+        body = self.request("POST", url, data=data, headers=headers, use_cache=use_cache)
+        return body.decode("utf-8", errors="replace")
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, str] | None = None,
+        data: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        use_cache: bool = True,
+    ) -> bytes:
+        cache_path = self._cache_path(method, url, {**(params or {}), **(data or {})}) if use_cache else None
         if cache_path is not None and cache_path.exists():
             return cache_path.read_bytes()
-        body = self._fetch(url, params)
+        body = self._fetch(method, url, params, data, headers)
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             cache_path.write_bytes(body)
         return body
 
-    def get_text(self, url: str, params: dict[str, str] | None = None, use_cache: bool = True) -> str:
-        return self.get_bytes(url, params, use_cache).decode("utf-8", errors="replace")
-
-    def _fetch(self, url: str, params: dict[str, str] | None) -> bytes:
+    def _fetch(
+        self,
+        method: str,
+        url: str,
+        params: dict[str, str] | None,
+        data: dict[str, str] | None,
+        headers: dict[str, str] | None,
+    ) -> bytes:
+        send = getattr(self._session, method.lower())
+        kwargs: dict[str, object] = {"params": params, "timeout": self._timeout}
+        if data is not None:
+            kwargs["data"] = data
+        if headers:
+            kwargs["headers"] = headers
         last_error: Exception | None = None
         for attempt in range(self._max_retries + 1):
             self._throttle()
             try:
-                resp = self._session.get(url, params=params, timeout=self._timeout)
+                resp = send(url, **kwargs)
             except requests.RequestException as exc:
                 last_error = exc
             else:
                 if resp.status_code == 200:
                     return resp.content
                 if resp.status_code not in RETRY_STATUS:
-                    raise HttpError(f"GET {url} returned HTTP {resp.status_code}")
-                last_error = HttpError(f"GET {url} returned HTTP {resp.status_code}")
+                    raise HttpError(f"{method} {url} returned HTTP {resp.status_code}")
+                last_error = HttpError(f"{method} {url} returned HTTP {resp.status_code}")
             if attempt < self._max_retries:
                 wait = self._backoff * 2**attempt
-                log.warning("GET %s failed (%s); retrying in %.0fs", url, last_error, wait)
+                log.warning("%s %s failed (%s); retrying in %.0fs", method, url, last_error, wait)
                 time.sleep(wait)
-        raise HttpError(f"GET {url} failed after {self._max_retries + 1} attempts: {last_error}")
+        raise HttpError(f"{method} {url} failed after {self._max_retries + 1} attempts: {last_error}")
 
     def _throttle(self) -> None:
         wait = self._min_interval - (time.monotonic() - self._last_request)
@@ -83,8 +117,8 @@ class HttpClient:
             time.sleep(wait)
         self._last_request = time.monotonic()
 
-    def _cache_path(self, url: str, params: dict[str, str] | None) -> Path | None:
+    def _cache_path(self, method: str, url: str, params: dict[str, str]) -> Path | None:
         if self._cache_dir is None:
             return None
-        key = url + "?" + "&".join(f"{k}={v}" for k, v in sorted((params or {}).items()))
+        key = method + " " + url + "?" + "&".join(f"{k}={v}" for k, v in sorted(params.items()))
         return self._cache_dir / hashlib.sha256(key.encode()).hexdigest()[:32]
