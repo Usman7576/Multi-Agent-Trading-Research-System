@@ -15,12 +15,43 @@ a Portfolio Manager). The LLM layer is one input among many and has to earn its 
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1 Quant core** | Point-in-time store, US data, KSE-100 snapshots, features, LightGBM, HMM regimes, backtester, optimiser, risk engine, baselines | **Done** |
-| M2 PSX scraper | Prices, announcements, corporate actions, financial-report PDFs, PSX cost model | Next |
+| **M2 PSX** | Own PSX scraper (prices, index, announcements, payouts, PDF reports with OCR), LDCP total-return adjustment, point-in-time liquidity universe, circuit breakers, PSX costs, PSX baselines | **Done** (report extraction run on a sample so far) |
 | M3 Text layer | News scraper, time-aware hybrid RAG with evaluation, LLM signal extraction | Planned |
 | M4 Agents | LangGraph analysts, Bull/Bear debate, Portfolio Manager, citation checks | Planned |
 | M5 Product | Daily jobs, paper trading, FastAPI, Streamlit dashboard with Decision Cards | Planned |
 
 Total LLM budget for the whole project: **$0 expected, $2 hard ceiling** (local models and free tiers).
+
+## Milestone 2 results (PSX, out of sample 2019 to 2026, after costs)
+
+Universe: the 60 most liquid PSX stocks on each date, chosen from data known that day, delisted names
+included. Costs: 17 bps commission and fees + 20 bps slippage per side + square-root impact; orders into
+stocks locked at the daily circuit limit do not fill; at most 10% of a day's traded value per order.
+
+| Strategy | CAGR | Sharpe [95% CI] | Max DD | Avg gross | Cost drag/yr |
+|---|---|---|---|---|---|
+| 0. Buy & hold KSE-100 | 21.2% | 1.06 [0.21, 1.97] | 37.0% | 100% | 0.0% |
+| 1. Equal-weight universe (monthly) | 19.3% | 0.81 [-0.03, 1.70] | 44.6% | 99% | 0.8% |
+| 2. 12-1 momentum, top 10 (monthly) | 21.2% | 0.80 [0.03, 1.62] | 38.2% | 100% | 2.3% |
+| 3. Ranked-factor composite + optimiser + risk | 6.5% | 0.64 [-0.23, 1.57] | 24.3% | 54% | 8.6% |
+| 4. LightGBM + optimiser + risk | 9.8% | 0.90 [0.00, 1.84] | 24.2% | 54% | 6.4% |
+| 4b. LightGBM, risk engine off | 9.3% | 0.75 [-0.11, 1.65] | 28.4% | 65% | 7.4% |
+
+**What this shows, honestly:**
+
+- **PSX has real, measurable cross-sectional signal.** LightGBM's out-of-sample IC is 0.071 (t = 6.3) and
+  the simple factor composite's is 0.064 (t = 5.3), versus 0.013 in the US. The deflated Sharpe of strategy 4
+  over 5 trials is 0.985, above the usual 0.95 bar.
+- **The risk engine matters here:** with it, Sharpe is 0.90 vs 0.75 without (p = 0.021) and drawdown falls
+  from 28.4% to 24.2%.
+- **Costs decide the outcome.** Weekly rebalancing at 8.6x turnover costs 6.4% a year; at 2x costs the
+  Sharpe drops to 0.33. With about half the market exposure, no strategy beat the KSE-100 during its strong
+  2023-25 rally. The obvious next step is lower turnover (slower rebalancing, a larger turnover penalty).
+- **Price features only:** results-PDF fundamentals are extracted for a sample so far, not the full history.
+
+Full report: [`reports/psx_baselines.md`](reports/psx_baselines.md).
+
+![PSX equity curves](reports/psx_equity.png)
 
 ## Milestone 1 results (US, out of sample 2019 to 2026, after costs)
 
@@ -85,18 +116,50 @@ Look-ahead bias makes most backtests on GitHub meaningless. Here it is handled i
 | The HMM regime uses filtered, not smoothed, probabilities | `models/regime.py` | `test_regime_filter_is_causal` |
 | Orders fill at the next open, never on the bar that created them | `backtest/broker_sim.py` | `test_fill_next_open_only` |
 
-## PSX: daily KSE-100 constituent snapshots
+## PSX data: built from scratch
 
-Past index membership is not published in a usable form, so history that is not recorded is lost. Starting
-in Milestone 1, a scraper archives the KSE-100 constituents page every trading day (raw HTML kept), parses
-it by header text with drift detection, sanity-checks the weights, and stores it point in time.
+There is no clean, free, point-in-time dataset for the Pakistan Stock Exchange, so the project builds one
+from the PSX Data Portal.
+
+| Dataset | How | Size |
+|---|---|---|
+| Daily bars, every listed symbol | Date-wise `/historical` requests (one per session, delisted names included); empty days are holidays, giving the calendar | 1.8M bars, 2015-2026 |
+| KSE-100 index levels | Symbol-month requests | 2015-2026 |
+| KSE-100 constituents | Daily snapshot (history is otherwise lost) | from Oct 2026 |
+| Company announcements | Paginated per company, exact timestamps and PDF links | ~47k for the KSE-100 names |
+| Dividends, bonus and right issues | Company payout tables | last ~2 years |
+| Financial results | Results PDFs: text or OCR (RapidOCR), rule extraction, accounting checks, local-LLM fallback | sample of 2026 reports |
+
+- **Endpoints and token:** the portal's own JavaScript loads tables through AJAX calls carrying an `X-Req-Id`
+  token embedded in each page; the client reads it and sends it like the browser does.
+- **Robustness:** 1 request/second, retries with backoff (including the plain `error` body the server sends
+  under load), columns mapped by header text, drift detection, raw responses archived (gzip), per-date
+  watermarks so every job resumes where it stopped.
+- **Corporate actions from LDCP:** on an ex-date PSX sets LDCP (the reference price) to the ex-adjusted
+  previous close, so `close / LDCP - 1` is the total return. Adjusted prices are compounded *forward*, so they
+  never change retroactively. Checked against announcements: **97.1% of 313 announced dividends and bonus
+  issues match a detected ex-date** (bonus issues 100%), and 90.8% agree with the announced amount within 0.5%.
+- **Cleaning:** futures, odd lots and rights (symbols with a dash) are excluded; no-trade days are flat bars.
 
 ```bash
-uv run python -m tra.scrapers.psx.run --dataset constituents --index KSE100
+uv run python -m tra.scrapers.psx.run --dataset symbols
+uv run python -m tra.scrapers.psx.run --dataset index --since 2015-01-01
+uv run python -m tra.scrapers.psx.run --dataset prices --since 2015-01-01
+uv run python -m tra.scrapers.psx.run --dataset adjust
+uv run python -m tra.scrapers.psx.run --dataset announcements --symbols kse100
+uv run python -m tra.scrapers.psx.run --dataset reports --llm --since 2026-01-01 --symbols kse100
+uv run python scripts/run_baselines.py --market psx
 ```
 
-To schedule it on weekdays at 17:30 (after the PSX close), run `scripts/register_psx_snapshot_task.ps1` once
-in PowerShell. Raw PSX data is never committed; only small parser fixtures are.
+The daily KSE-100 snapshot can be scheduled on weekdays at 17:30 with `scripts/register_psx_snapshot_task.ps1`.
+Raw PSX data is never committed; only small parser fixtures are.
+
+## Local LLM (no Ollama, $0)
+
+`llama-cpp-python` runs Qwen2.5-3B-Instruct (4-bit GGUF, 2.1 GB, kept in `data/models/`) on the CPU. Output
+is constrained to a Pydantic model's JSON schema, validated, retried once and cached. On noisy OCR text the 3B
+model was less accurate than the rule-based reader, so it runs only as a checked fallback and on a 1-in-20
+audit sample. Install with `uv sync --all-extras`.
 
 ## Run it locally (Windows, no Docker)
 
@@ -117,8 +180,11 @@ Experiments are YAML files merged as `configs/base.yaml` -> `configs/markets/<ma
 ```
 configs/            base settings, market universes, one file per experiment
 src/tra/
-  data/             Parquet lake, PITStore, calendars, quality checks, US ingestion, EDGAR parser
-  scrapers/         shared HTTP client, number parser, drift detection; psx/ index snapshot scraper
+  data/             Parquet lake, PITStore, calendars, quality checks, US ingestion, EDGAR parser,
+                    PSX adjustment (LDCP), results-PDF extraction, point-in-time liquidity universe
+  scrapers/         shared HTTP client, number parser, drift detection; psx/ token-aware client, prices,
+                    index, constituents, announcements, payouts, reports, CLI
+  llm/              local llama.cpp client with schema-constrained JSON
   features/         technical, point-in-time fundamentals, cross-sectional ranks, labels, pipeline
   models/           purged k-fold, LightGBM return model, Gaussian HMM regime model
   strategies/       alpha models for every baseline and walk-forward LightGBM
@@ -135,7 +201,10 @@ tests/              offline tests on synthetic fixtures and saved HTML
 
 - **Survivorship bias (US):** the universe is today's 40 large caps across all 11 sectors, including some
   later-weak names. Absolute returns are flattered for every strategy; the comparisons between strategies are
-  the meaningful part. PSX universes will come from the daily constituent snapshots.
+  the meaningful part. The PSX universe has no such bias (rebuilt daily from liquidity, delisted included).
+- **PSX costs** are assumptions (commission, fees, slippage) to check against current broker rates; capital
+  gains tax is not modelled. The circuit-breaker band uses today's rule (7.5%) for all years.
+- **PSX sectors** come from today's symbol list, so delisted stocks are tagged "Unknown".
 - **Free data:** yfinance prices are retroactively split- and dividend-adjusted. Returns and ratios are
   unaffected; market capitalisation is rebuilt from split events so share counts stay consistent.
 - **Fundamentals timing:** EDGAR gives the filing date without a time, so a filing is treated as known only
@@ -145,7 +214,7 @@ tests/              offline tests on synthetic fixtures and saved HTML
 ## Engineering
 
 Python 3.12, uv, pandas, DuckDB, LightGBM, hmmlearn, cvxpy, scikit-learn, pytest + hypothesis, ruff,
-GitHub Actions. The test suite runs offline on synthetic fixtures in about two minutes.
+GitHub Actions. The offline test suite (synthetic fixtures and saved PSX pages) runs in about two minutes.
 
 ## License
 
