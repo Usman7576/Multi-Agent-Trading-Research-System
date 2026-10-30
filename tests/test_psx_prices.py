@@ -124,3 +124,13 @@ def test_fetch_symbols(tmp_path):
     df = fetch_symbols(client, ParquetLake(tmp_path), pd.Timestamp("2026-10-30 12:00", tz="UTC"))
     luck = df.set_index("symbol").loc["LUCK"]
     assert luck["sector"] == "CEMENT" and not luck["is_debt"]
+
+
+def test_client_retries_error_body_with_fresh_token():
+    http = MagicMock()
+    http.get_text.return_value = '<script>window.__ps = {"_k":"tok"};</script>'
+    http.post_text.side_effect = ["error", "<table>ok</table>"]
+    client = PSXClient(http, backoff_seconds=0)
+    assert client.post("/historical", {"date": "2024-01-02"}) == "<table>ok</table>"
+    assert http.get_text.call_count == 2  # token fetched again after the error body
+    assert http.post_text.call_args.args[2]["X-Req-Id"] == "tok"

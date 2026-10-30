@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import time
 from typing import Any
 
 from tra.scrapers.common.http import HttpClient, HttpError
@@ -25,9 +26,10 @@ _TOKEN = re.compile(r'"_k"\s*:\s*"([^"]+)"')
 
 
 class PSXClient:
-    def __init__(self, http: HttpClient) -> None:
+    def __init__(self, http: HttpClient, backoff_seconds: float = 5.0) -> None:
         self._http = http
         self._token: str | None = None
+        self._backoff = backoff_seconds
 
     def _headers(self) -> dict[str, str]:
         if self._token is None:
@@ -38,13 +40,23 @@ class PSXClient:
             self._token = match.group(1)
         return {"X-Req-Id": self._token, "X-Requested-With": "XMLHttpRequest"}
 
-    def post(self, path: str, data: dict[str, str], use_cache: bool = False) -> str:
-        try:
-            return self._http.post_text(BASE + path, data, self._headers(), use_cache=use_cache)
-        except HttpError:
-            log.warning("POST %s failed; refreshing the page token and retrying once", path)
+    def post(self, path: str, data: dict[str, str], use_cache: bool = False, attempts: int = 4) -> str:
+        """POST a portal form. The server sometimes answers a plain ``error`` body under load; that is
+        retried with backoff and a fresh page token, like a rejected request."""
+        last: Exception | None = None
+        for attempt in range(attempts):
+            try:
+                text = self._http.post_text(BASE + path, data, self._headers(), use_cache=use_cache)
+                if text.strip().lower() != "error":
+                    return text
+                last = HttpError(f"POST {path} {data} returned an 'error' body")
+            except HttpError as exc:
+                last = exc
             self._token = None
-            return self._http.post_text(BASE + path, data, self._headers(), use_cache=use_cache)
+            wait = self._backoff * 2**attempt
+            log.warning("%s; retrying in %.0fs with a fresh token", last, wait)
+            time.sleep(wait)
+        raise HttpError(f"POST {path} failed after {attempts} attempts: {last}")
 
     def get_json(self, path: str) -> Any:
         text = self._http.request("GET", BASE + path, headers=self._headers(), use_cache=False)
