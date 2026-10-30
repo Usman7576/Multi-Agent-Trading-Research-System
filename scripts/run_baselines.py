@@ -269,7 +269,7 @@ def main() -> None:
             lgbm = alpha  # type: ignore[assignment]
         state.record_run(
             uuid.uuid4().hex[:12],
-            name,
+            cfg.name,  # full experiment name, e.g. psx_b4_lightgbm (trials are counted per market)
             cfg.config_hash(),
             started,
             pd.Timestamp.now(tz="UTC").isoformat(),

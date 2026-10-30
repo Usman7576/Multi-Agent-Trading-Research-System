@@ -130,8 +130,10 @@ def run_backtest(
     px = data.prices
     factor = px["adj_close"] / px["close"]
     open_adj = px.assign(v=px["open"] * factor).pivot(index="date", columns="ticker", values="v")
-    close_adj = px.pivot(index="date", columns="ticker", values="adj_close")
-    returns = close_adj.pct_change()
+    # Mark to market at the last traded price: thin stocks (common on PSX) do not trade every session.
+    # Orders still fill only on days with a real open price.
+    close_adj = px.pivot(index="date", columns="ticker", values="adj_close").sort_index().ffill()
+    returns = close_adj.pct_change(fill_method=None)
     adv = data.raw["adv_20"].unstack("ticker")
     daily_vol = data.raw["vol_21_daily"].unstack("ticker")
 

@@ -70,7 +70,8 @@ class StateDB:
         latest = {
             (n, h): json.loads(m).get("sharpe") for n, h, m in rows if n not in exclude and same_market(n)
         }
-        return [float(s) for s in latest.values() if s is not None]
+        # runs with an undefined Sharpe (e.g. broken by a bug before it was fixed) carry no information
+        return [float(s) for s in latest.values() if s is not None and s == s]
 
     def get_watermark(self, dataset: str, key: str) -> str | None:
         row = self._con.execute(

@@ -84,8 +84,9 @@ class SimBroker:
                 if order.ticker in blocked:
                     self.unfilled.append((day, order))
                     continue
-                if limits.max_participation is not None and limits.traded_value is not None:
-                    cap = limits.max_participation * float(limits.traded_value.get(order.ticker, 0.0))
+                traded = None if limits.traded_value is None else limits.traded_value.get(order.ticker)
+                if limits.max_participation is not None and traded is not None:  # stocks only, not the index
+                    cap = limits.max_participation * float(traded)
                     if abs(shares * price) > cap:
                         self.unfilled.append((day, order))
                         shares = np.sign(shares) * cap / price

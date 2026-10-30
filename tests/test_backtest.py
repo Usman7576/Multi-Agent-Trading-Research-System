@@ -248,3 +248,13 @@ def test_circuit_lock_blocks_fill_and_participation_caps_size():
     broker.fill_pending_orders(nxt, pd.Series({"AAA": 10.0, "BBB": 10.0}), pd.Series(), pd.Series(), limits)
     assert "AAA" not in broker.positions  # locked at the upper limit: nobody sells
     assert broker.positions["BBB"] == pytest.approx(500.0)  # 10% of Rs 50k traded value at Rs 10
+
+
+def test_positions_in_untraded_stocks_keep_their_last_price(data):
+    """A held stock with no bar on a session is valued at its last close, not NaN."""
+    import dataclasses
+
+    gappy = data.prices[~((data.prices["ticker"] == "AAA") & data.prices["date"].dt.day.isin([5, 6, 7]))]
+    cfg = _cfg("equal_weight", "equal", risk=False, rebalance="monthly", top_n=None)
+    res = run_backtest(cfg, dataclasses.replace(data, prices=gappy), make_alpha(cfg.model, cfg.seed))
+    assert res.nav.notna().all()
