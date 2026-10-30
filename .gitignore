@@ -10,8 +10,8 @@ __pycache__/
 htmlcov/
 
 # Data and runtime state (never committed)
-data/
-mlruns/
+/data/
+/mlruns/
 *.duckdb
 *.sqlite
 *.parquet
