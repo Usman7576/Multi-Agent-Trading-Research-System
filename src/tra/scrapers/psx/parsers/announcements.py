@@ -99,12 +99,16 @@ def parse_company_payouts(html: str, symbol: str, source: str = "payouts") -> pd
                 {
                     "symbol": symbol,
                     "announced_at": announced.tz_localize(TIMEZONE).tz_convert("UTC"),
-                    "period_end": pd.to_datetime(period.group(1), format="%d/%m/%Y") if period else pd.NaT,
+                    "period_end": pd.to_datetime(period.group(1), format="%d/%m/%Y", errors="coerce")
+                    if period
+                    else pd.NaT,
                     "period_code": period.group(2) if period else None,
                     "kind": {"D": "dividend", "B": "bonus", "R": "right"}[kind.upper()],
                     "percent": float(pct),
                     "details": details,
-                    "book_closure_from": pd.to_datetime(closure[0], format="%d/%m/%Y") if closure else pd.NaT,
+                    "book_closure_from": pd.to_datetime(closure[0], format="%d/%m/%Y", errors="coerce")
+                    if closure
+                    else pd.NaT,
                 }
             )
     return pd.DataFrame(rows)

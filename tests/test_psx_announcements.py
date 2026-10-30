@@ -69,3 +69,9 @@ def test_incremental_paging_stops_at_known_announcements(tmp_path):
     client.post.reset_mock()
     assert fetch_announcements(client, lake, ["LUCK"]) == 0
     assert client.post.call_count == 1  # first page already known: stop
+
+
+def test_invalid_dates_typed_by_companies_become_missing_not_errors():
+    html = read("company_payouts_EFERT.html").replace("30/09/2026(IIIQ)", "31/09/2026(IIIQ)")
+    df = parse_company_payouts(html, "EFERT")
+    assert pd.isna(df["period_end"].iloc[0]) and df["percent"].iloc[0] == 55.0
