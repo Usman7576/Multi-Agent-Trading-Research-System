@@ -57,12 +57,19 @@ class StateDB:
         )
         self._con.commit()
 
-    def trial_sharpes(self, exclude: tuple[str, ...] = ()) -> list[float]:
+    def trial_sharpes(self, exclude: tuple[str, ...] = (), prefix: str = "") -> list[float]:
         """Latest Sharpe of each distinct (name, config_hash) ever run: the trials for deflated Sharpe."""
         rows = self._con.execute(
             "SELECT name, config_hash, metrics_json FROM runs WHERE status = 'ok' ORDER BY finished_at"
         ).fetchall()
-        latest = {(n, h): json.loads(m).get("sharpe") for n, h, m in rows if n not in exclude}
+
+        # Trials are counted per market: names carry a market prefix ("psx_"), US names have none
+        def same_market(n: str) -> bool:
+            return n.startswith(prefix) if prefix else not n.startswith("psx_")
+
+        latest = {
+            (n, h): json.loads(m).get("sharpe") for n, h, m in rows if n not in exclude and same_market(n)
+        }
         return [float(s) for s in latest.values() if s is not None]
 
     def get_watermark(self, dataset: str, key: str) -> str | None:
