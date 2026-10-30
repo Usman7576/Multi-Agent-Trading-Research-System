@@ -69,8 +69,13 @@ def _ocr(pdf: bytes, max_pages: int) -> str:
     for i in range(min(len(doc), max_pages)):
         if _has_pnl("\n".join(lines)):
             break
-        image = doc[i].render(scale=2.0).to_numpy()
-        result, _ = engine(image)
+        result = None
+        for scale in (2.0, 1.4):  # large scanned pages can exhaust memory at full resolution
+            try:
+                result, _ = engine(doc[i].render(scale=scale).to_numpy())
+                break
+            except Exception as exc:  # ONNX runtime raises its own error types (e.g. bad allocation)
+                log.warning("OCR page %d at scale %.1f failed: %s", i + 1, scale, str(exc)[:120])
         # group detected boxes into lines by their vertical position
         boxes = sorted(result or [], key=lambda r: (round(r[0][0][1] / 12), r[0][0][0]))
         current_y, current = None, []
@@ -135,7 +140,7 @@ _MONTHS = [
     (re.compile(r"nine\s+months|9\s*months|third\s+quarter", re.I), 9),
     (re.compile(r"half[- ]year|six\s+months|6\s*months|second\s+quarter", re.I), 6),
     (re.compile(r"(?:year|annual)\s+ended|twelve\s+months|12\s*months", re.I), 12),
-    (re.compile(r"(?:first\s+)?quarter\s+ended|three\s+months|3\s*months", re.I), 3),
+    (re.compile(r"(?:first\s+)?qua?rter\s+ended|three\s+months|3\s*months", re.I), 3),
 ]
 
 
@@ -175,9 +180,11 @@ def rule_extract(text: str, title: str = "") -> ResultsExtract:
         if pattern.search(text):
             unit = name
             break
-    months = next((m for p, m in _MONTHS if p.search(title)), None) or next(
-        (m for p, m in _MONTHS if p.search(text)), None
-    )
+    # PSX statements put the cumulative column first ("Nine months ended" before "Quarter ended"), so the
+    # period length comes from the statement's own headers; the title decides only for annual reports.
+    title_months = next((m for p, m in _MONTHS if p.search(title)), None)
+    text_months = next((m for p, m in _MONTHS if p.search(_relevant_text(text))), None)
+    months = 12 if title_months == 12 else (text_months or title_months)
     if "taxation" in found:
         found["taxation"] = abs(found["taxation"])
     return ResultsExtract(period_months=months, unit=unit, **found)

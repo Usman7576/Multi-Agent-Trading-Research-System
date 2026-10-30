@@ -35,6 +35,14 @@ def test_parse_announcements_with_timestamp_and_pdf():
         ("Financial Results for the Year Ended 2025-06-30 ", "2025-06-30"),
         ("Financial Results for the Half Year Ended 2024-12-31", "2024-12-31"),
         ("Presentation of Corporate Briefing Session", None),
+        ("Financial Results for the Quarter Ended March 31, 2026", "2026-03-31"),
+        ("FINANCIAL RESULTS FOR THE YEAR ENDED JUNE 30, 2025", "2025-06-30"),
+        ("Financial Results for the Quarter Ended 31 March 2026", "2026-03-31"),
+        ("Financial Results for the Quarter Ended 31.03.2026", "2026-03-31"),
+        ("Financial Results for the Year Ended 30-06-2025", "2025-06-30"),
+        ("Financial Results for the 3rd Quarter ended March 31st, 2026 (Un-audited)", "2026-03-31"),
+        ("Board Meeting Other Than Financial Results", None),
+        ("Financial Results for the Quarter Ended", None),
     ],
 )
 def test_result_period_end(title, expected):
@@ -75,3 +83,25 @@ def test_invalid_dates_typed_by_companies_become_missing_not_errors():
     html = read("company_payouts_EFERT.html").replace("30/09/2026(IIIQ)", "31/09/2026(IIIQ)")
     df = parse_company_payouts(html, "EFERT")
     assert pd.isna(df["period_end"].iloc[0]) and df["percent"].iloc[0] == 55.0
+
+
+def test_undated_results_titles_get_an_inferred_quarter_end():
+    from tra.scrapers.psx.parsers.announcements import inferred_period_end, is_results_title
+
+    assert is_results_title("Financial Results for the Quater Ended")
+    assert not is_results_title("Board Meeting Other Then Financial Results")
+    assert inferred_period_end(pd.Timestamp("2026-10-29 03:00", tz="UTC")) == pd.Timestamp("2026-09-30")
+    assert inferred_period_end(pd.Timestamp("2026-04-05")) == pd.Timestamp(
+        "2025-12-31"
+    )  # too close to Mar 31
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Financial Results for the Quarter Ended September 30,2026", "2026-09-30"),
+        ("Financial Results for the Quater Ended March 2026", "2026-03-31"),
+    ],
+)
+def test_more_title_variants(title, expected):
+    assert result_period_end(title) == pd.Timestamp(expected)

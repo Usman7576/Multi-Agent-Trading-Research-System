@@ -64,17 +64,68 @@ def _empty() -> pd.DataFrame:
     )
 
 
-RESULT_TITLE = re.compile(
-    r"financial results? for the (?:quarter|half[- ]year|year|period|nine months?)\s+ended\s+"
-    r"(\d{4}-\d{2}-\d{2})",
-    re.IGNORECASE,
-)
+RESULT_TITLE = re.compile(r"financial\s+results?\s+for\s+the\s+(.{0,40}?)\bended\s+(.+)", re.IGNORECASE)
+_DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%B %Y",
+    "%b %Y",
+    "%B %d, %Y",
+    "%B %d %Y",
+    "%d %B %Y",
+    "%d %B, %Y",
+    "%b %d, %Y",
+    "%d %b %Y",
+    "%d.%m.%Y",
+    "%d-%m-%Y",
+    "%d/%m/%Y",
+]
 
 
 def result_period_end(title: str) -> pd.Timestamp | None:
-    """Period end from titles like 'Financial Results for the Quarter Ended 2026-09-30'."""
+    """Period end from a results title, whatever date style the company used.
+
+    Handles 'Quarter Ended 2026-09-30', 'Year Ended June 30, 2026', 'Quarter Ended 31 March 2026',
+    '31.03.2026' and trailing notes such as '(Un-audited)'. 'Other than financial results' notices and
+    titles without a parseable date return None.
+    """
+    if re.search(r"other\s+th[ae]n", title, re.IGNORECASE):
+        return None
     m = RESULT_TITLE.search(title)
-    return pd.Timestamp(m.group(1)) if m else None
+    if not m:
+        return None
+    text = re.sub(r"\(.*?\)", "", m.group(2))
+    text = re.sub(r"(\d)(st|nd|rd|th)\b", r"\1", text, flags=re.IGNORECASE)
+    text = " ".join(text.replace("–", "-").split()).strip(" .,-")
+    candidates = re.findall(
+        r"\d{4}-\d{2}-\d{2}|\d{1,2}[./-]\d{1,2}[./-]\d{4}|[A-Za-z]+\s+\d{1,2},?\s*\d{4}"
+        r"|\d{1,2}\s+[A-Za-z]+,?\s+\d{4}|[A-Za-z]+,?\s+\d{4}",
+        text,
+    )
+    for cand in candidates:
+        cand = re.sub(r",(?=\d)", ", ", cand)
+        for fmt in _DATE_FORMATS:
+            try:
+                parsed = pd.to_datetime(cand.title() if "%B" in fmt or "%b" in fmt else cand, format=fmt)
+            except (ValueError, TypeError):
+                continue
+            if fmt in ("%B %Y", "%b %Y"):  # month and year only ('March 2026') means the month end
+                return pd.Timestamp(parsed) + pd.offsets.MonthEnd(0)
+            return pd.Timestamp(parsed)
+    return None
+
+
+def is_results_title(title: str) -> bool:
+    """A financial results announcement (not a 'board meeting other than financial results' notice)."""
+    return bool(re.search(r"financial\s+results?", title, re.IGNORECASE)) and not re.search(
+        r"other\s+th[ae]n", title, re.IGNORECASE
+    )
+
+
+def inferred_period_end(announced: pd.Timestamp, min_lag_days: int = 10) -> pd.Timestamp:
+    """For results titles without a date: the last calendar quarter end at least ``min_lag_days`` before
+    the announcement (results are published weeks after the period closes)."""
+    cutoff = pd.Timestamp(announced).tz_localize(None).normalize() - pd.Timedelta(days=min_lag_days)
+    return cutoff if cutoff.is_quarter_end else cutoff - pd.offsets.QuarterEnd(1)
 
 
 def parse_company_payouts(html: str, symbol: str, source: str = "payouts") -> pd.DataFrame:

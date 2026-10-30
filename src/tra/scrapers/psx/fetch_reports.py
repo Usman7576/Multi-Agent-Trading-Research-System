@@ -16,7 +16,7 @@ import pandas as pd
 from tra.data.lake import ParquetLake
 from tra.data.psx_financials import agreement, llm_extract, needs_llm, pdf_text, rule_extract, to_record
 from tra.scrapers.psx.client import PSXClient
-from tra.scrapers.psx.parsers.announcements import result_period_end
+from tra.scrapers.psx.parsers.announcements import inferred_period_end, is_results_title, result_period_end
 
 log = logging.getLogger(__name__)
 MARKET = "PSX"
@@ -25,8 +25,14 @@ MARKET = "PSX"
 def result_announcements(lake: ParquetLake, symbols: Iterable[str], since: str) -> pd.DataFrame:
     ann = lake.read("announcements", MARKET)
     ann = ann[ann["symbol"].isin(set(symbols)) & ann["doc_path"].notna()].copy()
+    ann = ann[ann["title"].map(is_results_title)]
     ann["period_end"] = ann["title"].map(result_period_end)
-    ann = ann[ann["period_end"].notna() & (ann["period_end"] >= pd.Timestamp(since))]
+    # undated titles ("Financial Results for the Quarter Ended"): last quarter end before the announcement
+    ann["period_end_inferred"] = ann["period_end"].isna()
+    ann.loc[ann["period_end_inferred"], "period_end"] = ann.loc[ann["period_end_inferred"], "known_at"].map(
+        inferred_period_end
+    )
+    ann = ann[ann["period_end"] >= pd.Timestamp(since)]
     return ann.sort_values(["symbol", "known_at"])
 
 

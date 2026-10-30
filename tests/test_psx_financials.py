@@ -148,3 +148,17 @@ def test_results_become_point_in_time_facts():
     assert ni["period_start"] == pd.Timestamp("2026-07-01") and ni["known_at"] == res["known_at"][1]
     shares = facts[facts.metric == "shares_outstanding"]["value"]
     assert shares.iloc[0] == pytest.approx(3e8)
+
+
+def test_period_length_comes_from_statement_headers_for_quarterly_titles():
+    text = (
+        "Nine months ended March 31, 2026   Quarter ended March 31, 2026\nProfit after taxation 900 300\n"
+        "Earnings per share 9.0 3.0"
+    )
+    assert rule_extract(text, "Financial Results for the Quarter Ended 2026-03-31").period_months == 9
+    assert (
+        rule_extract(
+            text.replace("Nine months", "Year"), "Financial Results for the Year Ended 2026-06-30"
+        ).period_months
+        == 12
+    )
