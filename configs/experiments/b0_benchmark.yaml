@@ -1,0 +1,7 @@
+# Strategy 0: buy and hold the market benchmark (SPY). No risk engine.
+name: b0_benchmark
+description: Buy and hold SPY
+rebalance: never
+model: {type: benchmark}
+portfolio: {method: hold_benchmark, top_n: null, target_vol: null}
+risk: {enabled: false}

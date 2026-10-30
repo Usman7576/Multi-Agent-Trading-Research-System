@@ -1,0 +1,54 @@
+# Shared defaults for every experiment. Experiment files override any key.
+# Risk limits are frozen here BEFORE looking at test results; every change counts as a new trial.
+market_name: US
+seed: 7
+initial_nav: 1000000
+rebalance: weekly
+
+dates:
+  start: 2015-01-02
+  test_start: 2019-01-02
+  end: null
+  holdout_start: null        # set to the month after the pinned agent LLM's training cutoff (Milestone 4)
+
+model:
+  type: factor_composite
+  horizon: 10
+  retrain_every: 63
+  embargo_days: 10
+  min_train_days: 504
+  cv_folds: 4
+  param_grid:
+    - {num_leaves: 7, max_depth: 3, learning_rate: 0.03, n_estimators: 300, min_child_samples: 200}
+    - {num_leaves: 15, max_depth: 4, learning_rate: 0.03, n_estimators: 300, min_child_samples: 200}
+    - {num_leaves: 31, max_depth: 5, learning_rate: 0.02, n_estimators: 400, min_child_samples: 400}
+
+portfolio:
+  method: mean_variance
+  top_n: 10
+  target_vol: 0.11
+  risk_aversion: 5.0
+  turnover_penalty: 0.002
+  cov_window: 126
+
+risk:
+  enabled: true
+  max_pos: 0.10
+  max_sector: 0.30
+  top5_max: 0.40
+  gross_normal: 1.0
+  gross_high_vol: 0.5
+  high_vol_prob: 0.7
+  dd_kill: 0.15
+  dd_kill_gross: 0.30
+  dd_recovery_window: 20
+  adv_cap: 0.01
+  adv_window: 20
+  cvar_max: 0.03
+  cvar_window: 252
+
+costs:
+  commission_bps: 0.0
+  slippage_bps: 5.0
+  impact_k: 0.1
+  min_trade_weight: 0.005

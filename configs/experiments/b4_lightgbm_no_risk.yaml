@@ -1,0 +1,5 @@
+# Ablation: strategy 4 without the risk engine. What does risk management contribute?
+name: b4_lightgbm_no_risk
+description: Strategy 4 with the risk engine switched off
+model: {type: lightgbm}
+risk: {enabled: false}

@@ -1,0 +1,7 @@
+# Strategy 2: classic 12-1 month momentum, top 10 names equal weight, monthly rebalance.
+name: b2_momentum
+description: 12-1 momentum, top 10, equal weight, monthly
+rebalance: monthly
+model: {type: momentum}
+portfolio: {method: equal, top_n: 10, target_vol: null}
+risk: {enabled: false}
