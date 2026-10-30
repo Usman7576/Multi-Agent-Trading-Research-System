@@ -107,7 +107,7 @@ LABELS: dict[str, list[str]] = {
     "eps": [
         r"earnings(?:\s*/\s*\(?loss\)?)?\s+per\s+share",
         r"(?:loss|profit)\s+per\s+share",
-        r"eps",
+        r"\beps\b",
     ],
 }
 _NUMBER = re.compile(r"\(?-?[\d,]+(?:\.\d+)?\)?")
