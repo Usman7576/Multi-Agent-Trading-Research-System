@@ -1,0 +1,64 @@
+[project]
+name = "tra"
+version = "0.1.0"
+description = "Multi-agent trading research system for PSX and US equities"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+authors = [{ name = "Usman7576" }]
+license = { text = "MIT" }
+dependencies = [
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "pyarrow>=16",
+    "duckdb>=1.1",
+    "requests>=2.32",
+    "yfinance>=0.2.50",
+    "pandas-market-calendars>=4.4",
+    "pydantic>=2.8",
+    "pydantic-settings>=2.4",
+    "pyyaml>=6.0",
+    "scipy>=1.13",
+    "scikit-learn>=1.5",
+    "lightgbm>=4.5",
+    "hmmlearn>=0.3.2",
+    "cvxpy>=1.5",
+    "beautifulsoup4>=4.12",
+    "lxml>=5.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "hypothesis>=6.112",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pre-commit>=3.8",
+    "types-requests",
+    "types-PyYAML",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tra"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "NPY"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+pythonpath = ["src"]
+markers = ["network: test needs internet access (skipped in CI)"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+strict = false

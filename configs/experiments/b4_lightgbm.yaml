@@ -1,0 +1,4 @@
+# Strategy 4: LightGBM on ranked features with purged CV, walk-forward retraining every 63 days.
+name: b4_lightgbm
+description: LightGBM return model, mean-variance optimiser, risk engine
+model: {type: lightgbm}

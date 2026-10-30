@@ -1,0 +1,49 @@
+# US validation market: 40 liquid large caps across all 11 GICS sectors.
+# Sectors are current classifications. Survivorship bias: these names are chosen with today's knowledge;
+# several later-weak names (INTC, PFE, MMM, BA, VZ, NKE) are kept on purpose. Documented in the README.
+name: US
+timezone: America/New_York
+calendar: XNYS
+close_time: "16:00"
+benchmark: SPY
+universe:
+  - {ticker: AAPL, sector: Information Technology}
+  - {ticker: MSFT, sector: Information Technology}
+  - {ticker: NVDA, sector: Information Technology}
+  - {ticker: INTC, sector: Information Technology}
+  - {ticker: CSCO, sector: Information Technology}
+  - {ticker: ORCL, sector: Information Technology}
+  - {ticker: GOOGL, sector: Communication Services}
+  - {ticker: META, sector: Communication Services}
+  - {ticker: VZ, sector: Communication Services}
+  - {ticker: DIS, sector: Communication Services}
+  - {ticker: AMZN, sector: Consumer Discretionary}
+  - {ticker: HD, sector: Consumer Discretionary}
+  - {ticker: MCD, sector: Consumer Discretionary}
+  - {ticker: NKE, sector: Consumer Discretionary}
+  - {ticker: JPM, sector: Financials}
+  - {ticker: BAC, sector: Financials}
+  - {ticker: WFC, sector: Financials}
+  - {ticker: GS, sector: Financials}
+  - {ticker: XOM, sector: Energy}
+  - {ticker: CVX, sector: Energy}
+  - {ticker: COP, sector: Energy}
+  - {ticker: SLB, sector: Energy}
+  - {ticker: JNJ, sector: Health Care}
+  - {ticker: PFE, sector: Health Care}
+  - {ticker: MRK, sector: Health Care}
+  - {ticker: UNH, sector: Health Care}
+  - {ticker: PG, sector: Consumer Staples}
+  - {ticker: KO, sector: Consumer Staples}
+  - {ticker: PEP, sector: Consumer Staples}
+  - {ticker: WMT, sector: Consumer Staples}
+  - {ticker: CAT, sector: Industrials}
+  - {ticker: BA, sector: Industrials}
+  - {ticker: HON, sector: Industrials}
+  - {ticker: MMM, sector: Industrials}
+  - {ticker: NEE, sector: Utilities}
+  - {ticker: DUK, sector: Utilities}
+  - {ticker: LIN, sector: Materials}
+  - {ticker: NEM, sector: Materials}
+  - {ticker: AMT, sector: Real Estate}
+  - {ticker: PLD, sector: Real Estate}

@@ -1,0 +1,5 @@
+# Strategy 3: equal-weight composite of ranked factors (no ML). Is machine learning needed at all?
+# Same construction and risk engine as strategy 4 so the only difference is the alpha model.
+name: b3_factor_composite
+description: Ranked-factor composite, mean-variance optimiser, risk engine
+model: {type: factor_composite}

@@ -1,0 +1,7 @@
+# Strategy 1: equal-weight the whole universe, monthly rebalance. Does stock selection add anything?
+name: b1_equal_weight
+description: Equal-weight universe, monthly rebalance
+rebalance: monthly
+model: {type: equal_weight}
+portfolio: {method: equal, top_n: null, target_vol: null}
+risk: {enabled: false}
