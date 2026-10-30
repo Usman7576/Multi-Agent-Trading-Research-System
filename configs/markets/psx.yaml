@@ -1,0 +1,19 @@
+# Pakistan Stock Exchange. The universe is not a fixed list: on each date it is the 60 most liquid
+# ordinary shares by 60-day average traded value, from data known that day (delisted names included),
+# so the backtest has no survivorship bias from today's KSE-100 membership.
+name: PSX
+timezone: Asia/Karachi
+calendar: PSX            # sessions derived from the scraped trading days
+close_time: "15:30"
+benchmark: KSE100
+universe_rule:
+  top_n: 60
+  window: 60
+  min_price: 5.0
+  min_history: 250
+  candidates: 150
+# Circuit breaker: +/-7.5% of LDCP or Rs 1, whichever is greater (current PSX rule; earlier years used
+# 5%). Kept as a parameter: verify against the current PSX rulebook.
+price_limit:
+  pct: 0.075
+  abs: 1.0

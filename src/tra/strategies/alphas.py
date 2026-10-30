@@ -33,9 +33,13 @@ class BenchmarkAlpha:
         return pd.Series(dtype=float)  # construction holds the benchmark directly
 
 
+def _members(day: pd.Timestamp, data: ResearchData) -> pd.Index:
+    return _day_slice(data.ranked, day).index
+
+
 class EqualWeightAlpha:
     def scores(self, day: pd.Timestamp, data: ResearchData) -> pd.Series:
-        row = _day_slice(data.raw, day)
+        row = _day_slice(data.raw, day).reindex(_members(day, data))
         return pd.Series(1.0, index=row.index[row["ret_21"].notna()])
 
 
@@ -43,7 +47,7 @@ class MomentumAlpha:
     """Classic 12-1 month momentum (Jegadeesh-Titman): skip the latest month to avoid reversal."""
 
     def scores(self, day: pd.Timestamp, data: ResearchData) -> pd.Series:
-        return _day_slice(data.raw, day)["mom_12_1"].dropna()
+        return _day_slice(data.raw, day)["mom_12_1"].reindex(_members(day, data)).dropna()
 
 
 # factor -> direction; equal-weight average of percentile ranks (no fitting at all)

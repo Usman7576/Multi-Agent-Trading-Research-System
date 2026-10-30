@@ -32,6 +32,16 @@ class Fill:
     order_created: pd.Timestamp
 
 
+@dataclass(frozen=True)
+class DayLimits:
+    """Market frictions for one session: circuit-breaker locks and a cap on volume participation."""
+
+    buy_blocked: frozenset[str] = frozenset()  # locked at the upper limit all day: no sellers
+    sell_blocked: frozenset[str] = frozenset()  # locked at the lower limit all day: no buyers
+    traded_value: pd.Series | None = None  # the day's traded value per ticker
+    max_participation: float | None = None
+
+
 @dataclass
 class SimBroker:
     cash: float
@@ -45,9 +55,18 @@ class SimBroker:
         self.pending.extend(o for o in orders if o.shares != 0)
 
     def fill_pending_orders(
-        self, day: pd.Timestamp, open_px: pd.Series, adv: pd.Series, daily_vol: pd.Series
+        self,
+        day: pd.Timestamp,
+        open_px: pd.Series,
+        adv: pd.Series,
+        daily_vol: pd.Series,
+        limits: DayLimits | None = None,
     ) -> list[Fill]:
-        """Fill every pending order at ``day``'s open. Orders created on ``day`` itself are rejected."""
+        """Fill every pending order at ``day``'s open. Orders created on ``day`` itself are rejected.
+
+        With ``limits``: an order into a stock locked at its circuit limit does not fill, and an order is cut
+        to ``max_participation`` of the day's traded value. Unfilled parts are dropped, not carried over.
+        """
         todays: list[Fill] = []
         orders, self.pending = self.pending, []
         for order in sorted(orders, key=lambda o: o.shares):  # sells (negative) first
@@ -60,6 +79,16 @@ class SimBroker:
             shares = order.shares
             if shares < 0:
                 shares = max(shares, -self.positions.get(order.ticker, 0.0))
+            if limits is not None:
+                blocked = limits.buy_blocked if shares > 0 else limits.sell_blocked
+                if order.ticker in blocked:
+                    self.unfilled.append((day, order))
+                    continue
+                if limits.max_participation is not None and limits.traded_value is not None:
+                    cap = limits.max_participation * float(limits.traded_value.get(order.ticker, 0.0))
+                    if abs(shares * price) > cap:
+                        self.unfilled.append((day, order))
+                        shares = np.sign(shares) * cap / price
             value = shares * price
             rate = self.costs.cost_rate(
                 value, adv.get(order.ticker, np.nan), daily_vol.get(order.ticker, np.nan)

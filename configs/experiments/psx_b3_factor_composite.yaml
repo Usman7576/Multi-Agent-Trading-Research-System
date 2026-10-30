@@ -1,0 +1,10 @@
+# Strategy 3: equal-weight composite of ranked factors (no ML). Is machine learning needed at all?
+market_name: PSX
+# Same construction and risk engine as strategy 4 so the only difference is the alpha model.
+name: psx_b3_factor_composite
+description: Ranked-factor composite, mean-variance optimiser, risk engine
+model: {type: factor_composite}
+# PSX trading costs (assumptions; verify current broker and exchange rates before relying on them):
+# brokerage ~15 bps incl. sales tax on commission, exchange/CDC/NCCPL/SECP fees ~2 bps,
+# wider spreads than US large caps, and at most 10% of a day's volume per order.
+costs: {commission_bps: 17.0, slippage_bps: 20.0, impact_k: 0.2, max_participation: 0.10}

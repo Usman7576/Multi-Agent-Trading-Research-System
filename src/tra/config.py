@@ -39,13 +39,32 @@ class Instrument(_Strict):
     sector: str
 
 
+class UniverseRule(_Strict):
+    """Point-in-time universe: the most liquid stocks on each date, using only data known that day."""
+
+    top_n: int = 60
+    window: int = Field(60, description="Sessions of traded value used for the liquidity ranking")
+    min_price: float = 5.0
+    min_history: int = Field(250, description="Sessions a stock must have traded before it can enter")
+    candidates: int = Field(150, description="Stocks ever ranked in this top-N get features computed")
+
+
+class PriceLimit(_Strict):
+    """Daily circuit breaker: price may move at most max(pct * LDCP, abs) from the reference price."""
+
+    pct: float
+    abs: float = 0.0
+
+
 class MarketConfig(_Strict):
     name: Literal["US", "PSX"]
     timezone: str
     calendar: str
     close_time: str = Field(description="Local session close, HH:MM")
     benchmark: str
-    universe: list[Instrument]
+    universe: list[Instrument] = Field(default_factory=list)
+    universe_rule: UniverseRule | None = None
+    price_limit: PriceLimit | None = None
 
     @property
     def tickers(self) -> list[str]:
@@ -76,6 +95,9 @@ class CostConfig(_Strict):
     slippage_bps: float = 5.0
     impact_k: float = 0.1
     min_trade_weight: float = Field(0.005, description="Skip trades smaller than this fraction of NAV")
+    max_participation: float | None = Field(
+        None, description="Max fraction of a day's volume one order may take"
+    )
 
 
 class ModelConfig(_Strict):

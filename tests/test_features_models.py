@@ -110,3 +110,20 @@ def test_return_model_finds_planted_signal():
     ic = daily_ic(model.predict(X[~train]), y[~train])
     assert ic_summary(ic)["mean_ic"] > 0.3
     assert model.feature_importance().index[0] == "signal"
+
+
+def test_liquidity_universe_is_point_in_time():
+    from tests.conftest import make_prices
+    from tra.config import UniverseRule
+    from tra.data.universe import liquidity_membership
+
+    px = make_prices()
+    px = px[px["ticker"] != "SPY"]
+    rule = UniverseRule(top_n=3, window=20, min_price=1.0, min_history=50, candidates=5)
+    full = liquidity_membership(px, rule)
+    cut_day = pd.Timestamp("2018-06-29")
+    cut = liquidity_membership(px[px["date"] <= cut_day], rule)
+    early = full[full.index.get_level_values("date") <= cut_day]
+    assert early.index.equals(cut.index)  # membership up to D does not depend on later data
+    assert full.groupby(level="date").size().max() == 3
+    assert full.index.get_level_values("date").min() >= px["date"].sort_values().unique()[49]

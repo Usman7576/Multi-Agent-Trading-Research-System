@@ -14,11 +14,12 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+import numpy as np
 import pandas as pd
 
-from tra.backtest.broker_sim import Fill, SimBroker
+from tra.backtest.broker_sim import DayLimits, Fill, SimBroker
 from tra.backtest.costs import CostModel
-from tra.config import ExperimentConfig
+from tra.config import ExperimentConfig, MarketConfig
 from tra.features.pipeline import ResearchData
 from tra.models.regime import RegimeModel, regime_observations
 from tra.portfolio.construct import construct
@@ -98,6 +99,30 @@ class RegimeTracker:
         return float(self.probs.iloc[n_hist - 1])
 
 
+def _day_limits(px: pd.DataFrame, market: MarketConfig, max_participation: float | None) -> dict:
+    """Per-session DayLimits from raw (unadjusted) bars: circuit locks and traded value."""
+    if market.price_limit is None and max_participation is None:
+        return {}
+    bars = px[px["ticker"] != market.benchmark]
+    traded = (bars["close"] * bars["volume"]).groupby([bars["date"], bars["ticker"]]).sum()
+    up = pd.Series(False, index=bars.index)
+    down = pd.Series(False, index=bars.index)
+    if market.price_limit is not None and "ldcp" in bars:
+        band = np.maximum(market.price_limit.pct * bars["ldcp"], market.price_limit.abs)
+        tick = 0.01
+        up = bars["low"] >= bars["ldcp"] + band - tick  # never traded below the upper limit
+        down = bars["high"] <= bars["ldcp"] - band + tick  # never traded above the lower limit
+    out = {}
+    for day, g in bars.groupby("date"):
+        out[day] = DayLimits(
+            buy_blocked=frozenset(g.loc[up[g.index], "ticker"]),
+            sell_blocked=frozenset(g.loc[down[g.index], "ticker"]),
+            traded_value=traded.xs(day, level="date"),
+            max_participation=max_participation,
+        )
+    return out
+
+
 def run_backtest(
     cfg: ExperimentConfig, data: ResearchData, alpha: AlphaModel, cost_multiplier: float = 1.0
 ) -> BacktestResult:
@@ -114,7 +139,8 @@ def run_backtest(
     sessions = close_adj.loc[pd.Timestamp(cfg.dates.test_start) : pd.Timestamp(end)].index
 
     broker = SimBroker(cfg.initial_nav, CostModel.from_config(cfg.costs, cost_multiplier))
-    risk = RiskEngine(cfg.risk, market.sectors)
+    risk = RiskEngine(cfg.risk, data.sectors)
+    limits = _day_limits(px, market, cfg.costs.max_participation)
     regime = RegimeTracker(close_adj[market.benchmark].dropna(), cfg.model.retrain_every, 504, cfg.seed)
     navs, weights, decisions, regime_p, turnover = {}, {}, [], {}, {}
 
@@ -126,6 +152,7 @@ def run_backtest(
             open_adj.loc[day],
             adv.loc[day] if day in adv.index else empty,
             daily_vol.loc[day] if day in daily_vol.index else empty,
+            limits.get(day),
         )
         close_px = close_adj.loc[day]
         nav = broker.nav(close_px)
@@ -142,7 +169,7 @@ def run_backtest(
             scores = alpha.scores(day, data)
             w_prev = weights[day]
             proposed = construct(
-                scores, returns.loc[:day], w_prev, market.sectors, cfg.portfolio, cfg.risk, market.benchmark
+                scores, returns.loc[:day], w_prev, data.sectors, cfg.portfolio, cfg.risk, market.benchmark
             )
             ctx = RiskContext(nav, adv.loc[day] if day in adv.index else empty, returns.loc[:day], p_hv)
             approved = risk.apply(day, proposed, ctx)

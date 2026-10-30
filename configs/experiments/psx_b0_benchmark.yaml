@@ -1,0 +1,12 @@
+# Strategy 0: buy and hold the market benchmark (KSE-100). No risk engine.
+market_name: PSX
+name: psx_b0_benchmark
+description: Buy and hold the KSE-100 index
+rebalance: never
+model: {type: benchmark}
+portfolio: {method: hold_benchmark, top_n: null, target_vol: null}
+risk: {enabled: false}
+# PSX trading costs (assumptions; verify current broker and exchange rates before relying on them):
+# brokerage ~15 bps incl. sales tax on commission, exchange/CDC/NCCPL/SECP fees ~2 bps,
+# wider spreads than US large caps, and at most 10% of a day's volume per order.
+costs: {commission_bps: 17.0, slippage_bps: 20.0, impact_k: 0.2, max_participation: 0.10}
