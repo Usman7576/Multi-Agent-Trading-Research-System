@@ -26,11 +26,19 @@ from tra.state import StateDB
 
 log = logging.getLogger(__name__)
 MARKET = "US"
-RENAME = {"Open": "open", "High": "high", "Low": "low", "Close": "close", "Adj Close": "adj_close",
-          "Volume": "volume"}
+RENAME = {
+    "Open": "open",
+    "High": "high",
+    "Low": "low",
+    "Close": "close",
+    "Adj Close": "adj_close",
+    "Volume": "volume",
+}
 
 
-def download_prices(tickers: list[str], start: date, end: date, calendar: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+def download_prices(
+    tickers: list[str], start: date, end: date, calendar: str
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Return (prices_daily, corporate_actions) frames for ``tickers``."""
     closes = session_closes(calendar, start, end)
     bars, actions = [], []
@@ -51,15 +59,25 @@ def download_prices(tickers: list[str], start: date, end: date, calendar: str) -
         for col, kind in [("Dividends", "dividend"), ("Stock Splits", "split")]:
             ev = hist.loc[hist[col] != 0, col]
             if not ev.empty:
-                actions.append(pd.DataFrame({
-                    "ticker": ticker, "ex_date": ev.index, "type": kind, "value": ev.to_numpy(),
-                    # The ex-date event is public by that session's close at the latest.
-                    "known_at": closes.reindex(ev.index).to_numpy(),
-                }))
+                actions.append(
+                    pd.DataFrame(
+                        {
+                            "ticker": ticker,
+                            "ex_date": ev.index,
+                            "type": kind,
+                            "value": ev.to_numpy(),
+                            # The ex-date event is public by that session's close at the latest.
+                            "known_at": closes.reindex(ev.index).to_numpy(),
+                        }
+                    )
+                )
     prices = pd.concat(bars, ignore_index=True)
     prices["market"] = MARKET
-    acts = pd.concat(actions, ignore_index=True) if actions else pd.DataFrame(
-        columns=["ticker", "ex_date", "type", "value", "known_at"])
+    acts = (
+        pd.concat(actions, ignore_index=True)
+        if actions
+        else pd.DataFrame(columns=["ticker", "ex_date", "type", "value", "known_at"])
+    )
     return prices, acts
 
 
@@ -70,16 +88,22 @@ def ingest_prices(lake: ParquetLake, state: StateDB, start: date, end: date) -> 
     sessions = session_closes(market.calendar, start, end).index
     issues = check_prices(prices, sessions)
     state.log_quality(MARKET, "prices_daily", issues)
-    log.info("Quality: %s", issues.groupby(["check", "severity"]).size().to_dict() if len(issues) else "clean")
+    log.info(
+        "Quality: %s", issues.groupby(["check", "severity"]).size().to_dict() if len(issues) else "clean"
+    )
     raise_on_errors(issues)
     n = lake.upsert("prices_daily", MARKET, prices)
     lake.upsert("corporate_actions", MARKET, actions)
     first = prices.groupby("ticker")["date"].min()
-    universe = pd.DataFrame({
-        "ticker": market.tickers, "sector": [market.sectors[t] for t in market.tickers],
-        "start_date": [first.get(t, pd.NaT) for t in market.tickers], "end_date": pd.NaT,
-        "source": "configs/markets/us.yaml (current constituents; survivorship bias documented)",
-    })
+    universe = pd.DataFrame(
+        {
+            "ticker": market.tickers,
+            "sector": [market.sectors[t] for t in market.tickers],
+            "start_date": [first.get(t, pd.NaT) for t in market.tickers],
+            "end_date": pd.NaT,
+            "source": "configs/markets/us.yaml (current constituents; survivorship bias documented)",
+        }
+    )
     lake.upsert("universe", MARKET, universe)
     log.info("prices_daily now has %d rows", n)
 
@@ -87,7 +111,9 @@ def ingest_prices(lake: ParquetLake, state: StateDB, start: date, end: date) -> 
 def ingest_fundamentals(lake: ParquetLake, settings: Settings) -> None:
     if not settings.sec_user_agent:
         raise SystemExit("Set SEC_USER_AGENT in .env (your name and email) before downloading from EDGAR")
-    client = HttpClient(settings.sec_user_agent, requests_per_second=5, cache_dir=settings.data_dir / "cache" / "sec")
+    client = HttpClient(
+        settings.sec_user_agent, requests_per_second=5, cache_dir=settings.data_dir / "cache" / "sec"
+    )
     ciks = ticker_to_cik(client)
     frames = []
     for ticker in load_market(MARKET).tickers:

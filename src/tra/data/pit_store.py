@@ -67,7 +67,9 @@ class PITStore:
         return self._con.execute(sql + " ORDER BY ticker, ex_date", {"as_of": as_of}).df()
 
     # ------------------------------------------------------------ fundamentals
-    def fundamentals(self, market: str, as_of: pd.Timestamp, tickers: list[str] | None = None) -> pd.DataFrame:
+    def fundamentals(
+        self, market: str, as_of: pd.Timestamp, tickers: list[str] | None = None
+    ) -> pd.DataFrame:
         """Latest known value of every (ticker, metric, period) as of ``as_of``.
 
         Restatements filed later than ``as_of`` are invisible; restatements filed earlier replace the

@@ -12,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 from hmmlearn.hmm import GaussianHMM
-from scipy.special import logsumexp
 from scipy.stats import multivariate_normal
 
 
@@ -52,16 +51,16 @@ class RegimeModel:
                 for k in range(self.n_states)
             ]
         )
-        log_trans = np.log(self.hmm.transmat_)
-        log_alpha = np.empty_like(log_emission)
-        log_alpha[0] = np.log(self.hmm.startprob_) + log_emission[0]
-        log_alpha[0] -= logsumexp(log_alpha[0])
+        # Scaled forward recursion: alpha_t ~ (alpha_{t-1} @ A) * b_t, renormalised every step
+        emission = np.exp(log_emission - log_emission.max(axis=1, keepdims=True))
+        trans = self.hmm.transmat_
+        alpha = np.empty_like(emission)
+        a = self.hmm.startprob_ * emission[0]
+        alpha[0] = a / a.sum()
         for t in range(1, len(z)):
-            log_alpha[t] = logsumexp(log_alpha[t - 1][:, None] + log_trans, axis=0) + log_emission[t]
-            log_alpha[t] -= logsumexp(log_alpha[t])
-        return pd.DataFrame(
-            np.exp(log_alpha), index=obs.index, columns=[f"p_state_{k}" for k in range(self.n_states)]
-        )
+            a = (alpha[t - 1] @ trans) * emission[t]
+            alpha[t] = a / a.sum()
+        return pd.DataFrame(alpha, index=obs.index, columns=[f"p_state_{k}" for k in range(self.n_states)])
 
     def p_high_vol(self, obs: pd.DataFrame) -> pd.Series:
         return self.filtered_probs(obs)[f"p_state_{self.high_vol_state}"].rename("p_high_vol")

@@ -59,12 +59,22 @@ def parse_company_facts(facts: dict[str, Any], ticker: str) -> pd.DataFrame:
             for e in entries:
                 if e.get("form") not in FORMS or "filed" not in e or "end" not in e:
                     continue
-                rows.append({
-                    "ticker": ticker, "metric": metric, "concept": concept, "priority": priority,
-                    "value": float(e["val"]), "period_start": e.get("start"), "period_end": e["end"],
-                    "form": e["form"], "fy": e.get("fy"), "fp": e.get("fp"), "accn": e.get("accn", ""),
-                    "filed": e["filed"],
-                })
+                rows.append(
+                    {
+                        "ticker": ticker,
+                        "metric": metric,
+                        "concept": concept,
+                        "priority": priority,
+                        "value": float(e["val"]),
+                        "period_start": e.get("start"),
+                        "period_end": e["end"],
+                        "form": e["form"],
+                        "fy": e.get("fy"),
+                        "fp": e.get("fp"),
+                        "accn": e.get("accn", ""),
+                        "filed": e["filed"],
+                    }
+                )
     df = pd.DataFrame(rows)
     if df.empty:
         return df
