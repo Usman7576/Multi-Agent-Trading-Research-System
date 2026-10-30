@@ -79,7 +79,6 @@ class LightGBMAlpha:
     seed: int = 7
     model: ReturnModel | None = None
     last_train: pd.Timestamp | None = None
-    sessions_since_train: int = 0
     train_log: list[dict[str, Any]] = field(default_factory=list)
     predictions: list[pd.Series] = field(default_factory=list)
 
@@ -87,8 +86,7 @@ class LightGBMAlpha:
         return [c for c in data.ranked.columns if c in data.signal_columns or c in data.context.columns]
 
     def scores(self, day: pd.Timestamp, data: ResearchData) -> pd.Series:
-        self.sessions_since_train += 1
-        if self.model is None or self.sessions_since_train >= self.cfg.retrain_every:
+        if self.model is None or self._sessions_since_train(day, data) >= self.cfg.retrain_every:
             self._train(day, data)
         if self.model is None:
             return pd.Series(dtype=float)
@@ -98,6 +96,11 @@ class LightGBMAlpha:
         pred = self.model.predict(X)
         self.predictions.append(pred.rename(day))
         return pred
+
+    def _sessions_since_train(self, day: pd.Timestamp, data: ResearchData) -> int:
+        """Trading sessions elapsed since the last retrain (scores() is only called on rebalance days)."""
+        sessions = data.context.index
+        return int(sessions.searchsorted(day) - sessions.searchsorted(self.last_train))
 
     def _train(self, day: pd.Timestamp, data: ResearchData) -> None:
         labels = data.labels[data.labels["label_date"] <= day]  # only labels revealed by today's close
@@ -112,7 +115,7 @@ class LightGBMAlpha:
             self.cfg.param_grid, self.cfg.horizon, self.cfg.embargo_days, self.cfg.cv_folds, self.seed
         )
         self.model = model.fit(X, y)
-        self.last_train, self.sessions_since_train = day, 0
+        self.last_train = day
         self.train_log.append(
             {
                 "date": day,

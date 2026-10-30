@@ -57,6 +57,14 @@ class StateDB:
         )
         self._con.commit()
 
+    def trial_sharpes(self, exclude: tuple[str, ...] = ()) -> list[float]:
+        """Latest Sharpe of each distinct (name, config_hash) ever run: the trials for deflated Sharpe."""
+        rows = self._con.execute(
+            "SELECT name, config_hash, metrics_json FROM runs WHERE status = 'ok' ORDER BY finished_at"
+        ).fetchall()
+        latest = {(n, h): json.loads(m).get("sharpe") for n, h, m in rows if n not in exclude}
+        return [float(s) for s in latest.values() if s is not None]
+
     def get_watermark(self, dataset: str, key: str) -> str | None:
         row = self._con.execute(
             "SELECT last_value FROM watermarks WHERE dataset = ? AND key = ?", (dataset, key)

@@ -24,7 +24,7 @@ BASE_PARAMS: dict[str, Any] = {
     "colsample_bytree": 0.7,
     "reg_lambda": 5.0,
     "verbose": -1,
-    "n_jobs": 1,
+    "n_jobs": 4,
     "deterministic": True,
     "force_row_wise": True,
 }
