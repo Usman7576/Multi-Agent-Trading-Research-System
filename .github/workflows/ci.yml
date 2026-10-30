@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-    branches: [main]
   pull_request:
 
 jobs:
@@ -20,4 +19,9 @@ jobs:
       - name: Format check
         run: uv run ruff format --check .
       - name: Tests (offline, fixture data only)
-        run: uv run pytest -m "not network"
+        run: |
+          set -o pipefail
+          uv run pytest -m "not network" -rfE --tb=line 2>&1 | tee pytest.log
+      - name: Report failing tests as annotations
+        if: failure()
+        run: grep -E "^(FAILED|ERROR)|^E |Error:" pytest.log | head -30 | sed 's/^/::error::/'
