@@ -56,7 +56,7 @@ select = ["E", "F", "I", "B", "UP", "SIM", "NPY"]
 testpaths = ["tests"]
 addopts = "-q"
 pythonpath = ["src"]
-filterwarnings = ["ignore:The inplace keyword"]
+filterwarnings = ["ignore:The inplace keyword", "ignore:Setting the shape on a NumPy array"]
 markers = ["network: test needs internet access (skipped in CI)"]
 
 [tool.mypy]
