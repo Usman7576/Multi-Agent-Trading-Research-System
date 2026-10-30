@@ -1,32 +1,32 @@
 {
   "metrics": {
     "b0_benchmark": {
-      "total_return": 0.0,
-      "cagr": 0.0,
-      "ann_vol": 0.0,
-      "sharpe": NaN,
-      "sortino": NaN,
-      "max_drawdown": 0.0,
-      "max_dd_sessions": 0,
-      "calmar": NaN,
-      "beta": 0.0,
-      "ann_excess_vs_bench": -0.21289777647918898,
-      "information_ratio": -1.0646323242845324,
-      "var_95_daily": -0.0,
-      "cvar_95_daily": -0.0,
-      "hit_rate_daily": 0.0,
+      "total_return": 3.3914896410308284,
+      "cagr": 0.2120382987545426,
+      "ann_vol": 0.19999783915846983,
+      "sharpe": 1.061904238902861,
+      "sortino": 1.4179743651418906,
+      "max_drawdown": 0.3699759849157783,
+      "max_dd_sessions": 528,
+      "calmar": 0.5731136814266775,
+      "beta": 1.0000980173298066,
+      "ann_excess_vs_bench": -0.0005192233053972887,
+      "information_ratio": -0.3605050608755455,
+      "var_95_daily": 0.017164860907801737,
+      "cvar_95_daily": 0.029355783607492886,
+      "hit_rate_daily": 0.5379061371841155,
       "n_sessions": 1939,
-      "ann_turnover": 0.0,
-      "cost_drag_ann": 0.0,
-      "sharpe_ci_low": NaN,
-      "sharpe_ci_high": NaN,
-      "psr": NaN,
-      "total_costs": 0,
-      "n_trades": 0,
+      "ann_turnover": 0.0654423376720335,
+      "cost_drag_ann": 0.00025049199463820344,
+      "sharpe_ci_low": 0.20527925314653236,
+      "sharpe_ci_high": 1.9673831390138372,
+      "psr": 0.9982562207569395,
+      "total_costs": 3686.360466274783,
+      "n_trades": 1,
       "n_vetoes": 0,
       "kill_switch_events": 0,
-      "avg_gross": 0.0,
-      "deflated_sharpe": NaN
+      "avg_gross": 0.9994845360824742,
+      "deflated_sharpe": 0.9954586869706818
     },
     "b1_equal_weight": {
       "total_return": 2.8957221998939073,
@@ -54,7 +54,7 @@
       "n_vetoes": 0,
       "kill_switch_events": 0,
       "avg_gross": 0.9864244518222364,
-      "deflated_sharpe": 0.9870518016276699
+      "deflated_sharpe": 0.9722703980710099
     },
     "b2_momentum": {
       "total_return": 3.3845340350942656,
@@ -82,7 +82,7 @@
       "n_vetoes": 0,
       "kill_switch_events": 0,
       "avg_gross": 0.9962708953437414,
-      "deflated_sharpe": 0.9866613405112319
+      "deflated_sharpe": 0.9714949956892838
     },
     "b3_factor_composite": {
       "total_return": 0.6288333162387618,
@@ -110,13 +110,71 @@
       "n_vetoes": 4356,
       "kill_switch_events": 6,
       "avg_gross": 0.5391318298545392,
-      "deflated_sharpe": 0.9611544075066076
+      "deflated_sharpe": 0.9266372463569322
+    },
+    "b4_lightgbm": {
+      "total_return": 1.0483829236113875,
+      "cagr": 0.09767104121055814,
+      "ann_vol": 0.1104893712174906,
+      "sharpe": 0.8988420248094937,
+      "sortino": 1.2186775560430323,
+      "max_drawdown": 0.2415696378686384,
+      "max_dd_sessions": 492,
+      "calmar": 0.4043183658025354,
+      "beta": 0.486718934146123,
+      "ann_excess_vs_bench": -0.11358528633413195,
+      "information_ratio": -0.9860183042346027,
+      "var_95_daily": 0.010695152061594349,
+      "cvar_95_daily": 0.016334162318571828,
+      "hit_rate_daily": 0.5306859205776173,
+      "n_sessions": 1939,
+      "ann_turnover": 8.642314976770084,
+      "cost_drag_ann": 0.06428237695034139,
+      "sharpe_ci_low": 0.004116008248095167,
+      "sharpe_ci_high": 1.835252619074915,
+      "psr": 0.9933030233791386,
+      "total_costs": 648918.493194752,
+      "n_trades": 4965,
+      "n_vetoes": 3937,
+      "kill_switch_events": 6,
+      "avg_gross": 0.5400336234894861,
+      "deflated_sharpe": 0.9846462085239813
+    },
+    "b4_lightgbm_no_risk": {
+      "total_return": 0.9796941178558267,
+      "cagr": 0.09281599903318916,
+      "ann_vol": 0.12987877818592822,
+      "sharpe": 0.748496750408945,
+      "sortino": 0.9973366702886137,
+      "max_drawdown": 0.28401600545328687,
+      "max_dd_sessions": 571,
+      "calmar": 0.32679848054709343,
+      "beta": 0.5769484340939736,
+      "ann_excess_vs_bench": -0.11568393305993754,
+      "information_ratio": -1.1176132179385863,
+      "var_95_daily": 0.01250990205507121,
+      "cvar_95_daily": 0.019687007099880655,
+      "hit_rate_daily": 0.5301701908200103,
+      "n_sessions": 1939,
+      "ann_turnover": 10.125900307109653,
+      "cost_drag_ann": 0.07394098006002246,
+      "sharpe_ci_low": -0.10793618828789536,
+      "sharpe_ci_high": 1.654667147122904,
+      "psr": 0.9802849031839639,
+      "total_costs": 725144.9431550386,
+      "n_trades": 5169,
+      "n_vetoes": 0,
+      "kill_switch_events": 0,
+      "avg_gross": 0.6517506439148669,
+      "deflated_sharpe": 0.9597124185588004
     }
   },
   "tests": {
-    "Deflated Sharpe ratio of 3. Ranked-factor composite + optimiser + risk (0 trials)": 0.9611544075066076,
-    "p-value, Sharpe(3. Ranked-factor composite + optimiser + risk) > Sharpe(0. Buy & hold benchmark)": 0.0,
-    "p-value, Sharpe(3. Ranked-factor composite + optimiser + risk) > Sharpe(1. Equal-weight universe (monthly))": 0.7745
+    "Deflated Sharpe ratio of 4. LightGBM + optimiser + risk (5 trials)": 0.9846462085239813,
+    "p-value, Sharpe(3. Ranked-factor composite + optimiser + risk) > Sharpe(0. Buy & hold benchmark)": 0.985,
+    "p-value, Sharpe(3. Ranked-factor composite + optimiser + risk) > Sharpe(1. Equal-weight universe (monthly))": 0.7745,
+    "p-value, Sharpe(4. LightGBM + optimiser + risk) > Sharpe(3. Ranked-factor composite + optimiser + risk)": 0.075,
+    "p-value, Sharpe(4. LightGBM + optimiser + risk) > Sharpe(4b. LightGBM, risk engine off)": 0.0205
   },
   "signals": {
     "Factor composite": {
@@ -132,13 +190,29 @@
         "4": -10.6,
         "5": 13.9
       }
+    },
+    "LightGBM": {
+      "mean_ic": 0.07105518601160153,
+      "ic_std": 0.22937023949405794,
+      "ic_t_stat": 6.2802889200434295,
+      "hit_rate": 0.6155717761557178,
+      "n_dates": 411,
+      "quintile_fwd_excess_bps": {
+        "1": -22.3,
+        "2": -22.3,
+        "3": -19.5,
+        "4": 15.3,
+        "5": 48.7
+      }
     }
   },
   "config_hashes": {
     "b0_benchmark": "a56e256282cf",
     "b1_equal_weight": "e295516f32b8",
     "b2_momentum": "107a39fa49c3",
-    "b3_factor_composite": "3d6389dfae95"
+    "b3_factor_composite": "3d6389dfae95",
+    "b4_lightgbm": "0054d620c535",
+    "b4_lightgbm_no_risk": "0afccee3c0ae"
   },
   "data_end": "2026-10-30"
 }

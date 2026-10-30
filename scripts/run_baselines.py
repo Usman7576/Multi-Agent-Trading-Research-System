@@ -61,6 +61,10 @@ MARKETS = {
         "title": "US quant baselines",
         "benchmark": "SPY",
         "universe": "40 US large caps",
+        "fundamentals_missing": "SEC EDGAR fundamentals were not available for this run (EDGAR needs "
+        "a contact "
+        "User-Agent in `.env`), so value and quality factors are absent and the composite uses price factors "
+        "only.",
         "survivorship": "the universe is today's large caps, so every strategy (including equal weight) "
         "benefits from knowing these companies survived. Absolute returns are flattered; comparisons "
         "between strategies on the same universe are fairer.",
@@ -70,6 +74,10 @@ MARKETS = {
         "title": "PSX quant baselines",
         "benchmark": "the KSE-100 index",
         "universe": "the 60 most liquid PSX stocks each day (point-in-time, delisted names included)",
+        "fundamentals_missing": "PSX fundamentals come from results PDFs (OCR + rules, LLM fallback). "
+        "Extraction "
+        "has so far run on a sample of 2026 reports only, so this run uses price and liquidity features; the "
+        "next run adds earnings yield and sales-to-price once the full report history is processed.",
         "survivorship": "the universe is rebuilt every day from data known that day and includes stocks "
         "that were later delisted, so there is no survivorship bias from today's index membership. "
         "Sectors come from today's symbol list, so delisted stocks are tagged 'Unknown'.",
@@ -205,12 +213,7 @@ def write_report(
         "configurations ever run (from the run registry in `data/state.sqlite`), including runs replaced "
         "after bug fixes. See `reports/experiment_log.md`.",
         "- **Fundamentals:** "
-        + (
-            "SEC EDGAR fundamentals are included."
-            if has_fundamentals
-            else "SEC EDGAR fundamentals were not available for this run (EDGAR needs a contact User-Agent "
-            "in `.env`), so value and quality factors are absent and the composite uses price factors only."
-        ),
+        + ("SEC EDGAR fundamentals are included." if has_fundamentals else MK["fundamentals_missing"]),
         "",
         f"![Equity curves]({MK['out']}_equity.png)",
         "",
