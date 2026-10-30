@@ -20,6 +20,7 @@ import pandas as pd
 from tra.config import Settings, load_market
 from tra.data.lake import ParquetLake
 from tra.data.psx_adjust import adjust_prices
+from tra.data.psx_financials import results_to_facts
 from tra.data.quality import check_prices
 from tra.data.universe import candidate_tickers
 from tra.llm.local import DEFAULT_MODEL, LocalLLM
@@ -81,6 +82,9 @@ def main() -> None:
     parser.add_argument("--since", type=date.fromisoformat, default=date(2015, 1, 1))
     parser.add_argument("--until", type=date.fromisoformat, default=None)
     parser.add_argument("--llm", action="store_true", help="Also extract report figures with the local LLM")
+    parser.add_argument(
+        "--symbols", default=None, help="Comma-separated symbols, or 'kse100' (default: universe)"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -105,17 +109,27 @@ def main() -> None:
             fetch_index_history(client, lake, raw, index, args.since, until)
     if args.dataset in {"adjust", "daily"}:
         adjust(lake, state)
+
+    def symbols() -> list[str]:
+        if args.symbols == "kse100":
+            snap = lake.read("index_constituents", "PSX")
+            return sorted(snap.loc[snap["snapshot_date"] == snap["snapshot_date"].max(), "symbol"])
+        return args.symbols.split(",") if args.symbols else universe_candidates(lake)
+
     if args.dataset in {"announcements", "daily"}:
-        fetch_announcements(client, lake, universe_candidates(lake))
+        fetch_announcements(client, lake, symbols())
     if args.dataset in {"payouts", "daily"}:
-        fetch_payouts(client, lake, universe_candidates(lake))
+        fetch_payouts(client, lake, symbols())
     if args.dataset in {"reports", "daily"}:
         llm = None
         model = settings.data_dir / "models" / DEFAULT_MODEL
         if args.llm and model.exists():
             llm = LocalLLM(model, settings.data_dir / "cache" / "llm.sqlite")
-        todo = result_announcements(lake, universe_candidates(lake), str(args.since))
+        todo = result_announcements(lake, symbols(), str(args.since))
         process_reports(client, lake, raw, todo, llm)
+        facts = results_to_facts(lake.read("psx_results", "PSX"))
+        if not facts.empty:
+            lake.upsert("fundamentals", "PSX", facts)
 
 
 if __name__ == "__main__":

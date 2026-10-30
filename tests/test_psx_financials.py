@@ -122,3 +122,29 @@ def test_process_reports_falls_back_and_marks_failures(tmp_path, monkeypatch):
     )
     assert out.loc["1", "method"] == "rules" and out.loc["1", "profit_after_tax_pkr"] == pytest.approx(8.4e9)
     assert out.loc["2", "method"] == "failed"
+
+
+def test_results_become_point_in_time_facts():
+    from tra.data.psx_financials import results_to_facts
+
+    res = pd.DataFrame(
+        {
+            "announcement_id": ["a", "b", "c"],
+            "symbol": ["LUCK"] * 3,
+            "method": ["rules", "llm", "failed"],
+            "period_months": [3, 6, None],
+            "period_end": pd.to_datetime(["2026-09-30", "2026-12-31", "2027-03-31"]),
+            "known_at": pd.to_datetime(
+                ["2026-10-29 03:00", "2027-01-25 10:00", "2027-04-20 10:00"], utc=True
+            ),
+            "profit_after_tax_pkr": [8.4e9, 17e9, 1e9],
+            "revenue_pkr": [45e9, 90e9, 1e9],
+            "eps": [28.0, 56.7, 3.0],
+        }
+    )
+    facts = results_to_facts(res)
+    assert set(facts["accn"]) == {"a", "b"}  # failed extraction dropped
+    ni = facts[(facts.metric == "net_income") & (facts.accn == "b")].iloc[0]
+    assert ni["period_start"] == pd.Timestamp("2026-07-01") and ni["known_at"] == res["known_at"][1]
+    shares = facts[facts.metric == "shares_outstanding"]["value"]
+    assert shares.iloc[0] == pytest.approx(3e8)

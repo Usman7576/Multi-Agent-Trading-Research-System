@@ -278,3 +278,50 @@ def agreement(a: ResultsExtract, b: ResultsExtract, rel_tol: float = 0.01) -> di
             )
             out[f] = abs(sa - sb) <= rel_tol * max(abs(sa), abs(sb), 1e-9)
     return out
+
+
+def results_to_facts(results: pd.DataFrame) -> pd.DataFrame:
+    """Usable results -> rows of the ``fundamentals`` table (same schema as US EDGAR facts).
+
+    Duration figures get ``period_start = period_end - months``; the share count is implied by profit
+    after tax / EPS and stored as an instant fact. Failed extractions and filings whose implied share
+    count is inconsistent with the company's other filings (likely unit errors) are dropped.
+    """
+    ok = results[(results["method"] != "failed") & results["period_months"].notna()].copy()
+    if ok.empty:
+        return pd.DataFrame()
+    ok = ok[implied_share_stability(ok)]
+    ok["period_end"] = pd.to_datetime(ok["period_end"])
+    start = ok.apply(
+        lambda r: r["period_end"] - pd.DateOffset(months=int(r["period_months"])) + pd.Timedelta(days=1),
+        axis=1,
+    )
+    shares = (ok["profit_after_tax_pkr"] / ok["eps"]).where(ok["eps"].abs() > 0)
+    frames = []
+    for metric, values, period_start in [
+        ("net_income", ok["profit_after_tax_pkr"], start),
+        ("revenue", ok["revenue_pkr"], start),
+        ("shares_outstanding", shares.abs(), pd.Series(pd.NaT, index=ok.index)),
+    ]:
+        frames.append(
+            pd.DataFrame(
+                {
+                    "ticker": ok["symbol"],
+                    "metric": metric,
+                    "concept": f"psx_results_{metric}",
+                    "priority": 0,
+                    "value": values,
+                    "period_start": period_start,
+                    "period_end": ok["period_end"],
+                    "form": "PSX",
+                    "fy": ok["period_end"].dt.year,
+                    "fp": ok["period_months"].astype(int).astype(str) + "M",
+                    "accn": ok["announcement_id"],
+                    "filed": ok["known_at"],
+                    "known_at": ok["known_at"],
+                    "market": "PSX",
+                }
+            )
+        )
+    facts = pd.concat(frames, ignore_index=True)
+    return facts[facts["value"].notna()].reset_index(drop=True)
