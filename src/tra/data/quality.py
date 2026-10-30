@@ -18,9 +18,19 @@ class DataQualityError(RuntimeError):
 
 
 def check_prices(
-    prices: pd.DataFrame, sessions: pd.DatetimeIndex, max_abs_return: float = 0.40
+    prices: pd.DataFrame,
+    sessions: pd.DatetimeIndex,
+    max_abs_return: float = 0.40,
+    check_missing_sessions: bool = True,
+    close_in_range: bool = True,
 ) -> pd.DataFrame:
-    """Validate a long prices_daily frame against the exchange calendar."""
+    """Validate a long prices_daily frame against the exchange calendar.
+
+    ``check_missing_sessions`` can be turned off for markets where thinly traded stocks routinely skip
+    sessions (PSX), where gaps are normal rather than data errors. ``close_in_range=False`` checks only the
+    open against high/low, for exchanges whose official close is not the last trade (PSX's closing-price
+    rule can put a thin stock's close outside the day's traded range).
+    """
     issues: list[pd.DataFrame] = []
 
     def add(mask: pd.Series, check: str, severity: str, detail: pd.Series | str) -> None:
@@ -49,14 +59,15 @@ def check_prices(
     add(prices["volume"] < 0, "negative_volume", "error", "volume < 0")
     add(prices[price_cols + ["volume"]].isna().any(axis=1), "missing_value", "warn", "NaN in OHLCV")
     tol = 1e-6
+    body = ["open", "close"] if close_in_range else ["open"]
     add(
-        prices["high"] < prices[["open", "close"]].max(axis=1) * (1 - tol),
+        prices["high"] < prices[body].max(axis=1) * (1 - tol),
         "high_below_body",
         "error",
         "high < max(open, close)",
     )
     add(
-        prices["low"] > prices[["open", "close"]].min(axis=1) * (1 + tol),
+        prices["low"] > prices[body].min(axis=1) * (1 + tol),
         "low_above_body",
         "error",
         "low > min(open, close)",
@@ -64,35 +75,47 @@ def check_prices(
     add(prices["known_at"].isna(), "missing_known_at", "error", "known_at is null")
 
     ordered = prices.sort_values(["ticker", "date"])
-    ret = ordered.groupby("ticker")["adj_close"].pct_change()
+    ret = ordered.groupby("ticker")["adj_close"].pct_change().reindex(prices.index)
     big = ret.abs() > max_abs_return
     add(
-        big.reindex(prices.index, fill_value=False),
+        big,
         "extreme_return",
         "warn",
-        ret.reindex(prices.index).map(lambda r: f"daily return {r:+.1%}"),
+        ret.where(big).map(lambda r: f"daily return {r:+.1%}", na_action="ignore"),
     )
 
-    session_set = set(pd.DatetimeIndex(sessions).normalize())
-    add(~prices["date"].isin(session_set), "non_session_date", "error", "date is not a trading session")
+    sessions = pd.DatetimeIndex(sessions).normalize()
+    add(~prices["date"].isin(set(sessions)), "non_session_date", "error", "date is not a trading session")
 
-    for ticker, g in prices.groupby("ticker"):
-        expected = [d for d in sessions if g["date"].min() <= d <= g["date"].max()]
-        missing = sorted(set(expected) - set(g["date"]))
-        if missing:
-            issues.append(
-                pd.DataFrame(
-                    {
-                        "check": "missing_session",
-                        "severity": "warn",
-                        "ticker": ticker,
-                        "date": missing,
-                        "detail": "no bar on a trading session",
-                    }
-                )
-            )
+    if check_missing_sessions:
+        issues.append(_missing_sessions(prices, sessions))
 
+    issues = [i for i in issues if not i.empty]
     return pd.concat(issues, ignore_index=True) if issues else pd.DataFrame(columns=COLUMNS)
+
+
+def _missing_sessions(prices: pd.DataFrame, sessions: pd.DatetimeIndex) -> pd.DataFrame:
+    """Sessions with no bar between a ticker's first and last bar (vectorised over a presence matrix)."""
+    present = (
+        pd.DataFrame({"date": prices["date"], "ticker": prices["ticker"], "v": True})
+        .drop_duplicates(["date", "ticker"])
+        .pivot(index="date", columns="ticker", values="v")
+        .reindex(sessions)
+        .notna()
+    )
+    started = present.cummax()
+    not_ended = present[::-1].cummax()[::-1]
+    missing = (started & not_ended & ~present).stack()
+    missing = missing[missing]
+    return pd.DataFrame(
+        {
+            "check": "missing_session",
+            "severity": "warn",
+            "ticker": missing.index.get_level_values(1),
+            "date": missing.index.get_level_values(0),
+            "detail": "no bar on a trading session",
+        }
+    )
 
 
 def raise_on_errors(issues: pd.DataFrame) -> None:

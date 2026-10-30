@@ -17,15 +17,69 @@ from datetime import date
 
 import pandas as pd
 
-from tra.config import Settings
+from tra.config import Settings, load_market
 from tra.data.lake import ParquetLake
+from tra.data.psx_adjust import adjust_prices, clean_bars
+from tra.data.psx_financials import results_to_facts
+from tra.data.quality import check_prices
+from tra.data.universe import candidate_tickers
+from tra.llm.local import DEFAULT_MODEL, LocalLLM
 from tra.scrapers.common.http import HttpClient
 from tra.scrapers.psx.client import USER_AGENT, PSXClient
+from tra.scrapers.psx.fetch_announcements import fetch_announcements, fetch_payouts
 from tra.scrapers.psx.fetch_constituents import snapshot_constituents
 from tra.scrapers.psx.fetch_prices import fetch_datewise, fetch_index_history, fetch_symbols, weekdays
+from tra.scrapers.psx.fetch_reports import process_reports, result_announcements
 from tra.state import StateDB
 
-DATASETS = ["constituents", "symbols", "prices", "index", "daily"]
+DATASETS = [
+    "constituents",
+    "symbols",
+    "prices",
+    "index",
+    "adjust",
+    "announcements",
+    "payouts",
+    "reports",
+    "daily",
+]
+
+
+def universe_candidates(lake: ParquetLake) -> list[str]:
+    """Stocks ever among the liquidity-universe candidates (for announcements and reports)."""
+    market = load_market("PSX")
+    prices = lake.read("prices_daily", "PSX")
+    prices = prices[(prices["ticker"] != market.benchmark) & (prices["security_type"] == "equity")]
+    assert market.universe_rule is not None
+    return candidate_tickers(prices, market.universe_rule)
+
+
+def adjust(lake: ParquetLake, state: StateDB) -> None:
+    """Total-return adjustment from LDCP, corporate-event detection and quality checks."""
+    prices = lake.read("prices_daily", "PSX")
+    index = prices[prices["ticker"] == "KSE100"].copy()
+    index["adj_close"] = index["close"]
+    bars, events = adjust_prices(clean_bars(prices[prices["ticker"] != "KSE100"]))
+    bars = pd.concat([bars, index], ignore_index=True)
+    sessions = pd.DatetimeIndex(sorted(bars["date"].unique()))
+    # thinly traded PSX stocks skip sessions all the time, so gaps are not checked
+    issues = check_prices(
+        bars[bars["security_type"] == "equity"],
+        sessions,
+        max_abs_return=0.25,
+        check_missing_sessions=False,
+        close_in_range=False,
+    )
+    state.log_quality("PSX", "prices_daily", issues)
+    # full rebuild: also removes bars dropped by cleaning (no valid close)
+    lake.replace("prices_daily", "PSX", bars)
+    lake.replace("corporate_events", "PSX", events)
+    logging.getLogger(__name__).info(
+        "Adjusted %d bars; %d corporate events; quality %s",
+        len(bars),
+        len(events),
+        issues.groupby(["check", "severity"]).size().to_dict(),
+    )
 
 
 def main() -> None:
@@ -34,6 +88,10 @@ def main() -> None:
     parser.add_argument("--index", action="append", help="Index code, repeatable (default KSE100)")
     parser.add_argument("--since", type=date.fromisoformat, default=date(2015, 1, 1))
     parser.add_argument("--until", type=date.fromisoformat, default=None)
+    parser.add_argument("--llm", action="store_true", help="Also extract report figures with the local LLM")
+    parser.add_argument(
+        "--symbols", default=None, help="Comma-separated symbols, or 'kse100' (default: universe)"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -56,6 +114,29 @@ def main() -> None:
     if args.dataset in {"index", "daily"}:
         for index in indices:
             fetch_index_history(client, lake, raw, index, args.since, until)
+    if args.dataset in {"adjust", "daily"}:
+        adjust(lake, state)
+
+    def symbols() -> list[str]:
+        if args.symbols == "kse100":
+            snap = lake.read("index_constituents", "PSX")
+            return sorted(snap.loc[snap["snapshot_date"] == snap["snapshot_date"].max(), "symbol"])
+        return args.symbols.split(",") if args.symbols else universe_candidates(lake)
+
+    if args.dataset in {"announcements", "daily"}:
+        fetch_announcements(client, lake, symbols())
+    if args.dataset in {"payouts", "daily"}:
+        fetch_payouts(client, lake, symbols())
+    if args.dataset in {"reports", "daily"}:
+        llm = None
+        model = settings.data_dir / "models" / DEFAULT_MODEL
+        if args.llm and model.exists():
+            llm = LocalLLM(model, settings.data_dir / "cache" / "llm.sqlite")
+        todo = result_announcements(lake, symbols(), str(args.since))
+        process_reports(client, lake, raw, todo, llm)
+        facts = results_to_facts(lake.read("psx_results", "PSX"))
+        if not facts.empty:
+            lake.upsert("fundamentals", "PSX", facts)
 
 
 if __name__ == "__main__":

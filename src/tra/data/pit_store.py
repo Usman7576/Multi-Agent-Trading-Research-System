@@ -103,6 +103,15 @@ class PITStore:
         """
         return self._con.execute(sql, {"day": day}).df()
 
+    def symbols(self, market: str, as_of: pd.Timestamp) -> pd.DataFrame:
+        """The latest symbol/sector snapshot fetched on or before ``as_of``."""
+        as_of = self._check(as_of)
+        sql = f"""
+            SELECT * FROM {self._src("symbols", market)} WHERE known_at <= $as_of
+            QUALIFY dense_rank() OVER (ORDER BY snapshot_date DESC) = 1
+        """
+        return self._con.execute(sql, {"as_of": as_of}).df()
+
     def index_constituents(self, market: str, index: str, as_of: pd.Timestamp) -> pd.DataFrame:
         """The latest constituent snapshot of ``index`` fetched on or before ``as_of``."""
         as_of = self._check(as_of)

@@ -234,3 +234,27 @@ def test_costs_reduce_returns(data):
     base = run_backtest(cfg, data, make_alpha(cfg.model, cfg.seed))
     stressed = run_backtest(cfg, data, make_alpha(cfg.model, cfg.seed), cost_multiplier=3.0)
     assert stressed.nav.iloc[-1] < base.nav.iloc[-1]
+
+
+def test_circuit_lock_blocks_fill_and_participation_caps_size():
+    from tra.backtest.broker_sim import DayLimits
+
+    nxt = DAY + pd.Timedelta(days=1)
+    broker = SimBroker(1_000_000.0, CostModel(0, 0, 0))
+    broker.submit([Order("AAA", 1000, DAY), Order("BBB", 1000, DAY)])
+    limits = DayLimits(
+        buy_blocked=frozenset({"AAA"}), traded_value=pd.Series({"BBB": 50_000.0}), max_participation=0.10
+    )
+    broker.fill_pending_orders(nxt, pd.Series({"AAA": 10.0, "BBB": 10.0}), pd.Series(), pd.Series(), limits)
+    assert "AAA" not in broker.positions  # locked at the upper limit: nobody sells
+    assert broker.positions["BBB"] == pytest.approx(500.0)  # 10% of Rs 50k traded value at Rs 10
+
+
+def test_positions_in_untraded_stocks_keep_their_last_price(data):
+    """A held stock with no bar on a session is valued at its last close, not NaN."""
+    import dataclasses
+
+    gappy = data.prices[~((data.prices["ticker"] == "AAA") & data.prices["date"].dt.day.isin([5, 6, 7]))]
+    cfg = _cfg("equal_weight", "equal", risk=False, rebalance="monthly", top_n=None)
+    res = run_backtest(cfg, dataclasses.replace(data, prices=gappy), make_alpha(cfg.model, cfg.seed))
+    assert res.nav.notna().all()

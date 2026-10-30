@@ -1,0 +1,12 @@
+# Strategy 2: classic 12-1 month momentum, top 10 names equal weight, monthly rebalance.
+market_name: PSX
+name: psx_b2_momentum
+description: 12-1 momentum, top 10, equal weight, monthly
+rebalance: monthly
+model: {type: momentum}
+portfolio: {method: equal, top_n: 10, target_vol: null}
+risk: {enabled: false}
+# PSX trading costs (assumptions; verify current broker and exchange rates before relying on them):
+# brokerage ~15 bps incl. sales tax on commission, exchange/CDC/NCCPL/SECP fees ~2 bps,
+# wider spreads than US large caps, and at most 10% of a day's volume per order.
+costs: {commission_bps: 17.0, slippage_bps: 20.0, impact_k: 0.2, max_participation: 0.10}

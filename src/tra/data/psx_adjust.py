@@ -26,7 +26,7 @@ def adjust_prices(prices: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     prev_close = bars.groupby("ticker")["close"].shift(1)
     ldcp = bars["ldcp"].where(bars["ldcp"] > 0, prev_close)
     # The first bar of a symbol (and any missing LDCP) has no reference: no return that day.
-    gross = (bars["close"] / ldcp).where(ldcp.notna() & (ldcp > 0), 1.0)
+    gross = (bars["close"] / ldcp).where(ldcp.notna() & (ldcp > 0) & (bars["close"] > 0), 1.0)
     first_close = bars.groupby("ticker")["close"].transform("first")
     bars["adj_close"] = first_close * gross.groupby(bars["ticker"]).cumprod()
 
@@ -90,3 +90,21 @@ def validate_against_payouts(
             }
         )
     return pd.DataFrame(rows)
+
+
+def clean_bars(prices: pd.DataFrame) -> pd.DataFrame:
+    """Apply PSX conventions before adjustment.
+
+    * Symbols with a dash (``ENGRO-CJUL`` futures, ``AICL-ODL`` odd lots, right entitlements) are tagged
+      ``derivative`` so they never enter the stock universe.
+    * On a day with no trades PSX reports open/high/low as 0 and a reference close: all four prices are set
+      to that close, so the bar is a flat, zero-volume day rather than a crash to zero.
+    * Bars without a positive close are dropped.
+    """
+    bars = prices[prices["close"] > 0].copy()  # a bar without a valid close carries no price information
+    is_equity = bars["security_type"] == "equity"
+    bars.loc[is_equity & bars["ticker"].str.contains("-", regex=False), "security_type"] = "derivative"
+    no_trade = (bars["volume"] <= 0) & (bars["close"] > 0)
+    for col in ("open", "high", "low"):
+        bars.loc[no_trade | (bars[col] <= 0), col] = bars["close"]
+    return bars

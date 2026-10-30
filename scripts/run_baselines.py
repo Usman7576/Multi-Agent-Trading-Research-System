@@ -47,7 +47,7 @@ EXPERIMENTS = [
     "b4_lightgbm_no_risk",
 ]
 LABELS = {
-    "b0_benchmark": "0. Buy & hold SPY",
+    "b0_benchmark": "0. Buy & hold benchmark",
     "b1_equal_weight": "1. Equal-weight universe (monthly)",
     "b2_momentum": "2. 12-1 momentum, top 10 (monthly)",
     "b3_factor_composite": "3. Ranked-factor composite + optimiser + risk",
@@ -55,6 +55,35 @@ LABELS = {
     "b4_lightgbm_no_risk": "4b. LightGBM, risk engine off",
 }
 REPORTS = REPO_ROOT / "reports"
+MARKETS = {
+    "us": {
+        "prefix": "",
+        "title": "US quant baselines",
+        "benchmark": "SPY",
+        "universe": "40 US large caps",
+        "fundamentals_missing": "SEC EDGAR fundamentals were not available for this run (EDGAR needs "
+        "a contact "
+        "User-Agent in `.env`), so value and quality factors are absent and the composite uses price factors "
+        "only.",
+        "survivorship": "the universe is today's large caps, so every strategy (including equal weight) "
+        "benefits from knowing these companies survived. Absolute returns are flattered; comparisons "
+        "between strategies on the same universe are fairer.",
+    },
+    "psx": {
+        "prefix": "psx_",
+        "title": "PSX quant baselines",
+        "benchmark": "the KSE-100 index",
+        "universe": "the 60 most liquid PSX stocks each day (point-in-time, delisted names included)",
+        "fundamentals_missing": "PSX fundamentals come from results PDFs (OCR + rules, LLM fallback). "
+        "Extraction "
+        "has so far run on a sample of 2026 reports only, so this run uses price and liquidity features; the "
+        "next run adds earnings yield and sales-to-price once the full report history is processed.",
+        "survivorship": "the universe is rebuilt every day from data known that day and includes stocks "
+        "that were later delisted, so there is no survivorship bias from today's index membership. "
+        "Sectors come from today's symbol list, so delisted stocks are tagged 'Unknown'.",
+    },
+}
+MK = MARKETS["us"]
 
 
 def summarise(res: BacktestResult) -> dict[str, float]:
@@ -114,11 +143,12 @@ def write_report(
     n_trials: int,
 ) -> None:
     lines = [
-        "# Milestone 1 results: US quant baselines",
+        f"# Results: {MK['title']}",
         "",
         f"Test period **{cfg.dates.test_start} to {data_end.date()}** (walk-forward, out of sample), "
-        "40 US large caps, daily bars, orders filled at the next open. Costs: "
-        f"{cfg.costs.slippage_bps:g} bps slippage per side + square-root impact (k={cfg.costs.impact_k}). "
+        f"{MK['universe']}, daily bars, orders filled at the next open. Benchmark: {MK['benchmark']}. Costs: "
+        f"{cfg.costs.commission_bps:g} bps commission and fees + {cfg.costs.slippage_bps:g} bps slippage per "
+        f"side + square-root impact (k={cfg.costs.impact_k}). "
         "Sharpe ratios use a zero risk-free rate. 95% Sharpe CIs from a stationary block bootstrap "
         "(mean block 20 days).",
         "",
@@ -178,24 +208,17 @@ def write_report(
     lines += [
         "## Reading these results honestly",
         "",
-        "- **Survivorship bias:** the universe is today's large caps, so every strategy (including equal "
-        "weight) benefits from knowing these companies survived. Absolute returns are flattered; comparisons "
-        "between strategies on the same universe are fairer.",
+        f"- **Survivorship bias:** {MK['survivorship']}",
         f"- **Trials:** the deflated Sharpe ratio counts all {n_trials} distinct non-benchmark "
         "configurations ever run (from the run registry in `data/state.sqlite`), including runs replaced "
         "after bug fixes. See `reports/experiment_log.md`.",
         "- **Fundamentals:** "
-        + (
-            "SEC EDGAR fundamentals are included."
-            if has_fundamentals
-            else "SEC EDGAR fundamentals were not available for this run (EDGAR needs a contact User-Agent "
-            "in `.env`), so value and quality factors are absent and the composite uses price factors only."
-        ),
+        + ("SEC EDGAR fundamentals are included." if has_fundamentals else MK["fundamentals_missing"]),
         "",
-        "![Equity curves](us_equity.png)",
+        f"![Equity curves]({MK['out']}_equity.png)",
         "",
     ]
-    (REPORTS / "us_baselines.md").write_text("\n".join(lines), encoding="utf-8")
+    (REPORTS / f"{MK['out']}_baselines.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def plot(results: dict[str, BacktestResult]) -> None:
@@ -212,15 +235,18 @@ def plot(results: dict[str, BacktestResult]) -> None:
     ax1.grid(alpha=0.25)
     ax2.set_ylabel("Drawdown")
     ax2.grid(alpha=0.25)
-    fig.suptitle("US baselines, out of sample, after costs")
+    fig.suptitle(f"{MK['title']}, out of sample, after costs")
     fig.tight_layout()
-    fig.savefig(REPORTS / "us_equity.png", dpi=130)
+    fig.savefig(REPORTS / f"{MK['out']}_equity.png", dpi=130)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--quick", action="store_true", help="Skip the LightGBM strategies")
+    parser.add_argument("--market", choices=sorted(MARKETS), default="us")
     args = parser.parse_args()
+    global MK
+    MK = {**MARKETS[args.market], "out": args.market}
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     REPORTS.mkdir(exist_ok=True)
     settings = Settings()
@@ -228,7 +254,7 @@ def main() -> None:
     state = StateDB(settings.data_dir / "state.sqlite")
 
     names = [n for n in EXPERIMENTS if not (args.quick and "lightgbm" in n)]
-    cfgs = {n: load_experiment(n) for n in names}
+    cfgs = {n: load_experiment(MK["prefix"] + n) for n in names}
     base = cfgs[names[0]]
     as_of = pd.Timestamp.now(tz="UTC")
     data = build_research_data(pit, base.market, as_of, horizon=cfgs["b3_factor_composite"].model.horizon)
@@ -246,7 +272,7 @@ def main() -> None:
             lgbm = alpha  # type: ignore[assignment]
         state.record_run(
             uuid.uuid4().hex[:12],
-            name,
+            cfg.name,  # full experiment name, e.g. psx_b4_lightgbm (trials are counted per market)
             cfg.config_hash(),
             started,
             pd.Timestamp.now(tz="UTC").isoformat(),
@@ -255,7 +281,7 @@ def main() -> None:
         )
         log.info("%s: Sharpe %.2f CAGR %.1f%%", name, rows[name]["sharpe"], 100 * rows[name]["cagr"])
 
-    trial_sharpes = state.trial_sharpes(exclude=("b0_benchmark",))
+    trial_sharpes = state.trial_sharpes(exclude=(MK["prefix"] + "b0_benchmark",), prefix=MK["prefix"])
     for n, m in rows.items():
         m["deflated_sharpe"] = deflated_sharpe_ratio(results[n].returns, trial_sharpes)
 
@@ -302,7 +328,9 @@ def main() -> None:
     has_fund = "earnings_yield" in data.signal_columns
     write_report(rows, signals, tests, stress, yearly, base, data_end, lgbm, has_fund, len(trial_sharpes))
     plot(results)
-    pd.DataFrame({n: r.nav for n, r in results.items()}).to_csv(REPORTS / "us_nav.csv", float_format="%.2f")
+    pd.DataFrame({n: r.nav for n, r in results.items()}).to_csv(
+        REPORTS / f"{MK['out']}_nav.csv", float_format="%.2f"
+    )
     payload = {
         "metrics": rows,
         "tests": tests,
@@ -310,13 +338,17 @@ def main() -> None:
         "config_hashes": {n: c.config_hash() for n, c in cfgs.items()},
         "data_end": str(data_end.date()),
     }
-    (REPORTS / "us_baselines.json").write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+    (REPORTS / f"{MK['out']}_baselines.json").write_text(
+        json.dumps(payload, indent=2, default=str), encoding="utf-8"
+    )
     if lgbm is not None:
         risk = results["b4_lightgbm"].risk
         vetoes = pd.DataFrame([{"date": d, **v.__dict__} for d, v in risk.vetoes])
         if not vetoes.empty:
-            vetoes.groupby("rule").size().rename("count").to_csv(REPORTS / "us_lightgbm_veto_counts.csv")
-    log.info("Wrote %s", REPORTS / "us_baselines.md")
+            vetoes.groupby("rule").size().rename("count").to_csv(
+                REPORTS / f"{MK['out']}_lightgbm_veto_counts.csv"
+            )
+    log.info("Wrote %s", REPORTS / f"{MK['out']}_baselines.md")
 
 
 if __name__ == "__main__":

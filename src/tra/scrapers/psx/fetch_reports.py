@@ -14,9 +14,9 @@ from pathlib import Path
 import pandas as pd
 
 from tra.data.lake import ParquetLake
-from tra.data.psx_financials import agreement, llm_extract, pdf_text, rule_extract, to_record
+from tra.data.psx_financials import agreement, llm_extract, needs_llm, pdf_text, rule_extract, to_record
 from tra.scrapers.psx.client import PSXClient
-from tra.scrapers.psx.parsers.announcements import result_period_end
+from tra.scrapers.psx.parsers.announcements import inferred_period_end, is_results_title, result_period_end
 
 log = logging.getLogger(__name__)
 MARKET = "PSX"
@@ -25,14 +25,28 @@ MARKET = "PSX"
 def result_announcements(lake: ParquetLake, symbols: Iterable[str], since: str) -> pd.DataFrame:
     ann = lake.read("announcements", MARKET)
     ann = ann[ann["symbol"].isin(set(symbols)) & ann["doc_path"].notna()].copy()
+    ann = ann[ann["title"].map(is_results_title)]
     ann["period_end"] = ann["title"].map(result_period_end)
-    ann = ann[ann["period_end"].notna() & (ann["period_end"] >= pd.Timestamp(since))]
+    # undated titles ("Financial Results for the Quarter Ended"): last quarter end before the announcement
+    ann["period_end_inferred"] = ann["period_end"].isna()
+    ann.loc[ann["period_end_inferred"], "period_end"] = ann.loc[ann["period_end_inferred"], "known_at"].map(
+        inferred_period_end
+    )
+    ann = ann[ann["period_end"] >= pd.Timestamp(since)]
     return ann.sort_values(["symbol", "known_at"])
 
 
 def process_reports(
-    client: PSXClient, lake: ParquetLake, raw_dir: Path, announcements: pd.DataFrame, llm=None
+    client: PSXClient,
+    lake: ParquetLake,
+    raw_dir: Path,
+    announcements: pd.DataFrame,
+    llm=None,
+    audit_every: int = 20,
 ) -> pd.DataFrame:
+    """Rules first; the LLM runs when rules are incomplete or fail the accounting checks, and on every
+    ``audit_every``-th report to measure rules-vs-LLM agreement. Filings that still fail are stored with
+    method 'failed' and are not used as features."""
     done: set[str] = set()
     if lake.exists("psx_results", MARKET):
         done = set(lake.read("psx_results", MARKET)["announcement_id"].astype(str))
@@ -50,7 +64,8 @@ def process_reports(
             log.warning("%s %s: unreadable PDF (%s)", a.symbol, a.announcement_id, exc)
             text, text_method = "", "unreadable"
         rules = rule_extract(text, a.title)
-        rec = {
+        final, method = rules, "rules"
+        rec: dict[str, object] = {
             "announcement_id": str(a.announcement_id),
             "symbol": a.symbol,
             "title": a.title,
@@ -58,15 +73,22 @@ def process_reports(
             "known_at": a.known_at,
             "text_method": text_method,
             "text_chars": len(text),
-            **to_record(rules, "rules"),
         }
-        if llm is not None and text_method in {"text", "ocr"}:
+        fallback = needs_llm(rules)
+        audit = len(rows) % audit_every == 0  # a sample where both run, to measure agreement
+        if llm is not None and text_method in {"text", "ocr"} and (fallback or audit):
             try:
-                model = llm_extract(llm, text, a.title)
+                # units are a document-level fact detected deterministically; the 3B model often misses them
+                model = llm_extract(llm, text, a.title).model_copy(update={"unit": rules.unit})
                 rec.update({f"llm_{k}": v for k, v in to_record(model, "llm").items()})
                 rec.update({f"agree_{k}": v for k, v in agreement(rules, model).items()})
+                if fallback and not needs_llm(model):
+                    final, method = model, "llm"
             except Exception as exc:
                 rec["llm_error"] = str(exc)[:300]
+        if needs_llm(final):
+            method = "failed"  # incomplete or inconsistent: never stored as a usable figure
+        rec.update(to_record(final, method))
         rows.append(rec)
         if len(rows) % 25 == 0:
             lake.upsert("psx_results", MARKET, pd.DataFrame(rows))
