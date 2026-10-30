@@ -217,6 +217,18 @@ def test_backtest_runs_and_is_deterministic(data, model, method):
         assert ratio.iloc[5:].std() < 1e-3  # holds SPY after the first fill
 
 
+def test_lightgbm_retrains_every_n_sessions_not_every_n_calls(data):
+    cfg = _cfg("lightgbm", "equal")
+    alpha = make_alpha(cfg.model, cfg.seed)
+    run_backtest(cfg, data, alpha)  # weekly rebalances, retrain_every = 126 sessions
+    dates = [t["date"] for t in alpha.train_log]
+    gaps = [
+        data.context.index.searchsorted(b) - data.context.index.searchsorted(a)
+        for a, b in zip(dates[:-1], dates[1:], strict=True)
+    ]
+    assert len(dates) >= 4 and all(126 <= g <= 131 for g in gaps)
+
+
 def test_costs_reduce_returns(data):
     cfg = _cfg("factor_composite", "equal", rebalance="daily")
     base = run_backtest(cfg, data, make_alpha(cfg.model, cfg.seed))

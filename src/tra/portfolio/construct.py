@@ -96,7 +96,11 @@ def _mean_variance(
         - cfg.risk_aversion * cp.quad_form(w, cp.psd_wrap(cov.to_numpy()))
         - cfg.turnover_penalty * cp.norm1(w - prev)
     )
-    constraints = [cp.sum(w) <= 1, w >= 0, w <= risk.max_pos, sector_matrix @ w <= risk.max_sector]
+    # Fully invested among the candidates: the optimiser decides the mix, while vol targeting and the risk
+    # engine decide gross exposure. (With a free budget, the risk penalty dominates the small alphas and the
+    # optimiser parks most of the portfolio in cash.)
+    budget = min(1.0, len(names) * risk.max_pos, len(sector_names) * risk.max_sector)
+    constraints = [cp.sum(w) == budget, w >= 0, w <= risk.max_pos, sector_matrix @ w <= risk.max_sector]
     problem = cp.Problem(objective, constraints)
     try:
         problem.solve(solver=cp.CLARABEL)
