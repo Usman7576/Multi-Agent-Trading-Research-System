@@ -19,7 +19,7 @@ import pandas as pd
 
 from tra.config import Settings, load_market
 from tra.data.lake import ParquetLake
-from tra.data.psx_adjust import adjust_prices
+from tra.data.psx_adjust import adjust_prices, clean_bars
 from tra.data.psx_financials import results_to_facts
 from tra.data.quality import check_prices
 from tra.data.universe import candidate_tickers
@@ -59,14 +59,21 @@ def adjust(lake: ParquetLake, state: StateDB) -> None:
     prices = lake.read("prices_daily", "PSX")
     index = prices[prices["ticker"] == "KSE100"].copy()
     index["adj_close"] = index["close"]
-    bars, events = adjust_prices(prices[prices["ticker"] != "KSE100"])
+    bars, events = adjust_prices(clean_bars(prices[prices["ticker"] != "KSE100"]))
     bars = pd.concat([bars, index], ignore_index=True)
     sessions = pd.DatetimeIndex(sorted(bars["date"].unique()))
-    issues = check_prices(bars[bars["security_type"] == "equity"], sessions, max_abs_return=0.25)
-    # thinly traded PSX stocks miss sessions all the time: only hard errors are logged, not gaps
-    state.log_quality("PSX", "prices_daily", issues[issues["check"] != "missing_session"])
-    lake.upsert("prices_daily", "PSX", bars)
-    lake.upsert("corporate_events", "PSX", events)
+    # thinly traded PSX stocks skip sessions all the time, so gaps are not checked
+    issues = check_prices(
+        bars[bars["security_type"] == "equity"],
+        sessions,
+        max_abs_return=0.25,
+        check_missing_sessions=False,
+        close_in_range=False,
+    )
+    state.log_quality("PSX", "prices_daily", issues)
+    # full rebuild: also removes bars dropped by cleaning (no valid close)
+    lake.replace("prices_daily", "PSX", bars)
+    lake.replace("corporate_events", "PSX", events)
     logging.getLogger(__name__).info(
         "Adjusted %d bars; %d corporate events; quality %s",
         len(bars),

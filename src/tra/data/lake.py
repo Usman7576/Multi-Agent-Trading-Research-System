@@ -41,6 +41,16 @@ class ParquetLake:
     def read(self, table: str, market: str) -> pd.DataFrame:
         return pd.read_parquet(self.path(table, market))
 
+    def replace(self, table: str, market: str, rows: pd.DataFrame) -> int:
+        """Overwrite a whole table (used when a full rebuild must also remove rows)."""
+        keys = TABLE_KEYS[table]
+        path = self.path(table, market)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(".tmp")
+        rows.drop_duplicates(subset=keys, keep="last").sort_values(keys).to_parquet(tmp, index=False)
+        tmp.replace(path)
+        return len(rows)
+
     def upsert(self, table: str, market: str, rows: pd.DataFrame) -> int:
         """Insert or replace rows by primary key. Returns the table's row count after the write."""
         keys = TABLE_KEYS[table]

@@ -61,3 +61,23 @@ def test_validation_matches_payout_to_ex_date():
     out = validate_against_payouts(events, payouts, DAYS)
     assert bool(out["matched"].iloc[0]) and out["ex_date"].iloc[0] == DAYS[2]
     assert abs(out["factor_error"].iloc[0]) < 0.001
+
+
+def test_clean_bars_tags_derivatives_and_flattens_no_trade_days():
+    from tra.data.psx_adjust import clean_bars
+
+    raw = pd.DataFrame(
+        {
+            "ticker": ["ENGRO-CJUL", "SFL", "LUCK"],
+            "security_type": ["equity"] * 3,
+            "open": [0.0, 0.0, 500.0],
+            "high": [0.0, 0.0, 510.0],
+            "low": [0.0, 0.0, 495.0],
+            "close": [291.2, 589.1, 505.0],
+            "volume": [0.0, 0.0, 1000.0],
+        }
+    )
+    out = clean_bars(raw).set_index("ticker")
+    assert out.loc["ENGRO-CJUL", "security_type"] == "derivative"
+    assert (out.loc["SFL", ["open", "high", "low"]] == 589.1).all()
+    assert out.loc["LUCK", "open"] == 500.0  # traded days are untouched
