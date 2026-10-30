@@ -84,3 +84,41 @@ def test_rules_vs_llm_agreement():
     a = ResultsExtract(revenue=45_123_456, profit_after_tax=8_400_000, eps=28.75, unit="PKR_000")
     b = ResultsExtract(revenue=45_123.456, profit_after_tax=8_400.0, eps=28.75, unit="PKR_mn")
     assert agreement(a, b) == {"revenue": True, "profit_after_tax": True, "eps": True}
+
+
+def test_ocr_style_text_without_spaces_and_dot_separators():
+    ocr = (
+        "PKRin'000'\nNet Revenue 131.863.008 125,207.898\nProfitbefore taxation 28,484,339 29,771,555\n"
+        "Taxation (5,926,872) (6,210,065)\nProfit after taxation 22,557,467 23,561,490\n"
+        "Earningspershare-basicanddiluted 15.01 15.68"
+    )
+    x = rule_extract(ocr, "Financial Results for the Quarter Ended 2026-09-30")
+    assert x.revenue == 131_863_008 and x.profit_after_tax == 22_557_467 and x.eps == pytest.approx(15.01)
+    assert x.unit == "PKR_000"
+
+
+def test_process_reports_falls_back_and_marks_failures(tmp_path, monkeypatch):
+    from unittest.mock import MagicMock
+
+    from tra.data.lake import ParquetLake
+    from tra.scrapers.psx import fetch_reports
+
+    texts = {"1": LETTER, "2": "Board meeting notice without figures"}
+    monkeypatch.setattr(fetch_reports, "pdf_text", lambda b: (texts[b.decode()], "text"))
+    client = MagicMock()
+    client.download.side_effect = lambda path: path.split("/")[-1].split(".")[0].encode()
+    ann = pd.DataFrame(
+        {
+            "announcement_id": ["1", "2"],
+            "symbol": ["LUCK", "LUCK"],
+            "title": ["Financial Results for the Quarter Ended 2026-09-30"] * 2,
+            "period_end": [pd.Timestamp("2026-09-30")] * 2,
+            "known_at": [pd.Timestamp("2026-10-29 03:00", tz="UTC")] * 2,
+            "doc_path": ["/download/document/1.pdf", "/download/document/2.pdf"],
+        }
+    )
+    out = fetch_reports.process_reports(client, ParquetLake(tmp_path), tmp_path / "raw", ann).set_index(
+        "announcement_id"
+    )
+    assert out.loc["1", "method"] == "rules" and out.loc["1", "profit_after_tax_pkr"] == pytest.approx(8.4e9)
+    assert out.loc["2", "method"] == "failed"

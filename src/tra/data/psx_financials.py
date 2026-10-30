@@ -30,12 +30,27 @@ log = logging.getLogger(__name__)
 MIN_TEXT_CHARS = 200
 
 
-def pdf_text(pdf: bytes, max_pages: int = 6) -> tuple[str, str]:
-    """Return (text, method) where method is 'text', 'ocr' or 'needs_ocr'."""
+def _has_pnl(text: str) -> bool:
+    """True once the text holds a complete profit and loss block (profit after tax and EPS)."""
+    low = re.sub(r"\s+", "", text.lower())
+    return "aftertax" in low and "pershare" in low
+
+
+def pdf_text(pdf: bytes, max_pages: int = 12) -> tuple[str, str]:
+    """Return (text, method) where method is 'text', 'ocr' or 'needs_ocr'.
+
+    Pages are read in order and reading stops at the first page that completes a profit and loss block,
+    which keeps OCR of long annexed reports affordable.
+    """
     import pdfplumber
 
+    pages: list[str] = []
     with pdfplumber.open(io.BytesIO(pdf)) as doc:
-        text = "\n".join((p.extract_text() or "") for p in doc.pages[:max_pages])
+        for page in doc.pages[:max_pages]:
+            pages.append(page.extract_text() or "")
+            if _has_pnl("\n".join(pages)):
+                break
+    text = "\n".join(pages)
     if len(text.strip()) >= MIN_TEXT_CHARS:
         return text, "text"
     try:
@@ -52,6 +67,8 @@ def _ocr(pdf: bytes, max_pages: int) -> str:
     lines: list[str] = []
     doc = pdfium.PdfDocument(pdf)
     for i in range(min(len(doc), max_pages)):
+        if _has_pnl("\n".join(lines)):
+            break
         image = doc[i].render(scale=2.0).to_numpy()
         result, _ = engine(image)
         # group detected boxes into lines by their vertical position
@@ -85,29 +102,27 @@ class ResultsExtract(BaseModel):
 
 UNIT_MULTIPLIER = {"PKR": 1.0, "PKR_000": 1e3, "PKR_mn": 1e6, "PKR_bn": 1e9}
 
+# Patterns run on lower-cased lines with all whitespace removed (robust to OCR spacing).
 LABELS: dict[str, list[str]] = {
     "revenue": [
-        r"net\s+(?:sales|revenue|turnover)",
-        r"(?:sales|revenue)\s*[-–]\s*net",
-        r"^\s*(?:sales|revenue|turnover)\b",
-        r"total\s+income",
-        r"mark[- ]?up\s*/\s*return\s*/\s*interest\s+earned",
+        r"^net(?:sales|revenue|turnover)",
+        r"^(?:sales|revenue|turnover)[-–]?net",
+        r"^(?:sales|revenue|turnover)(?:\(net\))?[\d(,]",
+        r"^totalincome",
+        r"^mark-?up/return/interestearned",
     ],
-    "gross_profit": [r"gross\s+(?:profit|\(loss\)|loss)"],
-    "profit_before_tax": [
-        r"(?:profit|\(loss\)|loss)[^\n]{0,20}before\s+tax",
-        r"profit\s*/\s*\(loss\)\s*before\s+tax",
-    ],
-    "taxation": [r"^\s*tax(?:ation)?\b", r"income\s+tax\s+expense"],
+    "gross_profit": [r"^gross(?:profit|\(loss\)|loss)"],
+    "profit_before_tax": [r"^(?:profit|\(loss\)|loss)[^\d]{0,20}beforetax"],
+    "taxation": [r"^tax(?:ation)?(?:-net)?[\d(,-]", r"^incometaxexpense"],
     "profit_after_tax": [
-        r"(?:profit|\(loss\)|loss)[^\n]{0,20}after\s+tax",
-        r"net\s+(?:profit|income)\s+for\s+the\s+period",
-        r"(?:profit|\(loss\))\s+for\s+the\s+(?:period|quarter|year)",
+        r"^(?:profit|\(loss\)|loss)[^\d]{0,20}aftertax",
+        r"^net(?:profit|income)forthe(?:period|quarter|year)",
+        r"^(?:profit|\(loss\)|profit/\(loss\))forthe(?:period|quarter|year)",
     ],
     "eps": [
-        r"earnings(?:\s*/\s*\(?loss\)?)?\s+per\s+share",
-        r"(?:loss|profit)\s+per\s+share",
-        r"\beps\b",
+        r"^(?:basic)?(?:and)?(?:diluted)?earnings(?:/\(?loss\)?)?pershare",
+        r"^(?:loss|profit)pershare",
+        r"^eps",
     ],
 }
 _NUMBER = re.compile(r"\(?-?[\d,]+(?:\.\d+)?\)?")
@@ -124,8 +139,12 @@ _MONTHS = [
 ]
 
 
-def _numbers(line: str) -> list[float]:
+def _numbers(line: str, amounts: bool = True) -> list[float]:
+    """Numbers on a line. For amounts (not per-share figures) OCR often reads thousands separators as
+    dots ("131.863.008"), so a dot followed by exactly three digits is treated as a separator."""
     out = []
+    if amounts:
+        line = re.sub(r"(?<=\d)\.(?=\d{3}(?:\D|$))", ",", line)
     for tok in _NUMBER.findall(line):
         neg = tok.startswith("(") and tok.endswith(")") or tok.startswith("-")
         digits = tok.strip("()-").replace(",", "")
@@ -141,11 +160,14 @@ def rule_extract(text: str, title: str = "") -> ResultsExtract:
     """Label-dictionary extraction of the first (current-period) figure on each matching line."""
     found: dict[str, float] = {}
     for line in text.splitlines():
-        low = line.lower()
+        # OCR often drops spaces ("Profitbeforetaxation"), so labels are matched without whitespace
+        low = re.sub(r"\s+", "", line.lower())
         for field, patterns in LABELS.items():
-            if field in found or not any(re.search(p, low, re.M) for p in patterns):
+            if field in found or not any(re.search(p, low) for p in patterns):
                 continue
-            nums = _numbers(line)
+            nums = _numbers(line, amounts=field != "eps")
+            if field != "eps":
+                nums = [n for n in nums if abs(n) >= 1000]  # skip note references and stray small numbers
             if nums:
                 found[field] = nums[0]
     unit = "PKR"
@@ -165,9 +187,10 @@ LLM_SYSTEM = (
     "You extract figures from a Pakistan Stock Exchange financial results announcement. Report only the "
     "CURRENT reporting period (the first figure column of the cumulative period, not the comparative "
     "period). Use the units stated in the document (PKR, PKR_000 for rupees in thousands, PKR_mn for "
-    "millions). Losses are negative. Use null for anything not present. Never invent numbers."
+    'millions). The unit is usually written above the figures, e.g. "Rupees in \'000" or "PKR in '
+    "'000\" means PKR_000. Losses are negative. Use null for anything not present. Never invent numbers."
 )
-PROMPT_VERSION = "psx-results-v1"
+PROMPT_VERSION = "psx-results-v2"
 
 
 def llm_extract(llm, text: str, title: str) -> ResultsExtract:  # llm: tra.llm.local.LocalLLM
@@ -175,12 +198,23 @@ def llm_extract(llm, text: str, title: str) -> ResultsExtract:  # llm: tra.llm.l
     return llm.extract(ResultsExtract, LLM_SYSTEM, f"Title: {title}\n\nDocument:\n{snippet}", PROMPT_VERSION)
 
 
-def _relevant_text(text: str, max_chars: int = 6000) -> str:
-    """Keep the part of the document around the profit and loss figures."""
-    low = text.lower()
-    anchors = [low.find(k) for k in ("profit", "revenue", "sales", "earnings per share") if low.find(k) >= 0]
-    start = max(0, min(anchors) - 1500) if anchors else 0
-    return text[start : start + max_chars]
+def _relevant_text(text: str, before: int = 2500, after: int = 1200) -> str:
+    """The profit and loss block: text around the first 'after tax' line (spacing-insensitive)."""
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if "aftertax" in re.sub(r"\s+", "", line.lower()):
+            head = "\n".join(lines[:i])
+            tail = "\n".join(lines[i:])
+            return head[-before:] + "\n" + tail[:after]
+    return text[: before + after]
+
+
+def needs_llm(x: ResultsExtract) -> bool:
+    """Rules are trusted when profit after tax and EPS were found and the accounting checks pass."""
+    checks = accounting_checks(x)
+    return (
+        x.profit_after_tax is None or x.eps is None or checks.pbt_tax_pat is False or checks.eps_sign is False
+    )
 
 
 # ----------------------------------------------------------------------------------------------- checks
