@@ -112,9 +112,8 @@ def main() -> None:
         symbols = sorted(snap.loc[snap["snapshot_date"] == snap["snapshot_date"].max(), "symbol"])
     else:
         symbols = args.symbols.split(",")
-    http = HttpClient(
-        USER_AGENT, requests_per_second=1 / 6, timeout_seconds=60
-    )  # GDELT asks for one per 5 seconds
+    # GDELT asks for one request per 5 seconds, but still answers 429 at 6, so stay well below that
+    http = HttpClient(USER_AGENT, requests_per_second=1 / 15, backoff_seconds=30.0, timeout_seconds=60)
     state = StateDB(settings.data_dir / "state.sqlite")
     until = args.until or pd.Timestamp.now(tz="UTC").year
     collect_history(http, lake, state, symbols, args.since, until)
