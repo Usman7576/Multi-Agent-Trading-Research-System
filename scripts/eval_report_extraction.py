@@ -29,6 +29,7 @@ from tra.scrapers.common.http import HttpClient
 from tra.scrapers.psx.client import USER_AGENT, PSXClient
 from tra.scrapers.psx.fetch_reports import process_reports, result_announcements
 
+RECENT_FROM = "2025-01-01"
 TOLERANCE = 0.25  # shares change with bonus issues, and consolidated EPS excludes minority interests
 
 
@@ -118,15 +119,33 @@ def main() -> None:
         skip,
     )
     good = (df["ratio"] - 1).abs() <= TOLERANCE
-    missing = df["ratio"].isna()
     if args.v:
         pd.set_option("display.width", 200, "display.max_rows", 500)
         print(df.assign(ok=good).sort_values(["symbol", "period_end"]).round(3).to_string())
-    print(
+    print(summary(df, good))
+
+
+def summary(df: pd.DataFrame, good: pd.Series) -> str:
+    """Today's share count is only a fair test of recent reports: bonus issues change it over the years, so
+    on older reports a mismatch may be a correct figure. Those are counted as unverified, not as wrong."""
+    recent = pd.to_datetime(df["period_end"]) >= pd.Timestamp(RECENT_FROM)
+    answered = df["ratio"].notna()
+    lines = [
         f"reports {len(df)} | companies {df['symbol'].nunique()} "
-        f"| correct {int(good.sum())} ({good.mean():.1%}) "
-        f"| wrong {int((~good & ~missing).sum())} | no result {int(missing.sum())}"
-    )
+        f"| answered {int(answered.sum())} ({answered.mean():.1%})"
+    ]
+    r, o = recent, ~recent
+    if r.any():
+        lines.append(
+            f"recent ({int(r.sum())}): correct {int((good & r).sum())} ({(good & r).sum() / r.sum():.1%}) "
+            f"| wrong {int((answered & ~good & r).sum())} | no answer {int((~answered & r).sum())}"
+        )
+    if o.any():
+        lines.append(
+            f"older ({int(o.sum())}): matches today's shares {int((good & o).sum())} "
+            f"| unverified {int((answered & ~good & o).sum())} | no answer {int((~answered & o).sum())}"
+        )
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

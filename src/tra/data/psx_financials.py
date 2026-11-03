@@ -147,8 +147,9 @@ LABELS: dict[str, list[str]] = {
         r"^(?:profit|\(?loss\)?|profit/\(loss\)|\(loss\)/profit)forthe(?:period|quarter|year)",
     ],
     "eps": [
-        r"^(?:basic|diluted|and|&|-)*earnings(?:/\(?loss\)?)?per(?:ordinary)?share",
-        r"^(?:basic|diluted|and|&|-)*\(?(?:loss|profit)\)?per(?:ordinary)?share",
+        # 'earning', 'earnings', OCR's 'earming'; '(loss)/earnings'; 'earnings / (loss)'
+        r"^(?:basic|diluted|and|&|-)*(?:\(?loss\)?/)?ear[nm]ings?(?:[/il|]\(?loss\)?)?per(?:ordinary)?share",
+        r"^(?:basic|diluted|and|&|-)*\(?(?:loss|profit)\)?(?:/\(?(?:loss|profit)\)?)?per(?:ordinary)?share",
         r"^eps\b",
     ],
 }
@@ -219,13 +220,18 @@ def _first_figure(line: str, is_eps: bool) -> float | None:
     return None
 
 
+# Second line of a wrapped EPS label: 'and diluted (Rupees) 3.62', 'Basic 17.70', 'For continuing operations'
+_EPS_CONTINUATION = re.compile(r"^(?:and|basic|diluted|(?:for)?continuing)")
+
+
 def _figure_at(lines: list[str], i: int, is_eps: bool) -> float | None:
     """Figure on line ``i``, or on one of the next lines holding only numbers (statement labels wrap)."""
     value = _first_figure(lines[i], is_eps)
     if value is not None:
         return value
     for line in lines[i + 1 : i + 4]:
-        if line.lstrip()[:1] in "(-" and (value := _first_figure(line, is_eps)) is not None:
+        wrapped = line.lstrip()[:1] in "(-" or (is_eps and _EPS_CONTINUATION.search(_squeeze(line)))
+        if wrapped and (value := _first_figure(line, is_eps)) is not None:
             return value
         if re.search(r"[a-z]{4,}", line.lower()) and not re.fullmatch(
             r"[\W\d]*(?:rupees?|rs)[\W\d]*", line.lower()
