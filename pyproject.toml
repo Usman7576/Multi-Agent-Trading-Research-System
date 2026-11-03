@@ -96,3 +96,4 @@ known-first-party = ["tra", "tests"]
 "tests/test_psx_financials.py" = ["E501"]  # statement text used as fixtures
 "tests/test_news.py" = ["E501"]  # feed text used as fixtures
 "tests/test_rag.py" = ["E501"]
+"tests/test_text_signals.py" = ["E501"]

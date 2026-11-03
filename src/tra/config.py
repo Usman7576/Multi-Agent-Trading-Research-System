@@ -108,6 +108,7 @@ class ModelConfig(_Strict):
     min_train_days: int = 504
     cv_folds: int = 4
     param_grid: list[dict[str, Any]] = Field(default_factory=list)
+    text_features: Literal["lm", "llm"] | None = Field(None, description="News sentiment features to add")
 
 
 class PortfolioConfig(_Strict):
@@ -151,7 +152,11 @@ class ExperimentConfig(_Strict):
 
     def config_hash(self) -> str:
         """Stable short hash of the full config, saved with every run."""
-        payload = json.dumps(self.model_dump(mode="json"), sort_keys=True)
+        dumped = self.model_dump(mode="json")
+        # Settings added later must not change older hashes, or old runs would count as new trials
+        if dumped["model"].get("text_features") is None:
+            dumped["model"].pop("text_features", None)
+        payload = json.dumps(dumped, sort_keys=True)
         return hashlib.sha256(payload.encode()).hexdigest()[:12]
 
 

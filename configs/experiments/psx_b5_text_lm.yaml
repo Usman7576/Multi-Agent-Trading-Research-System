@@ -1,0 +1,6 @@
+# Strategy 5: strategy 4 plus news sentiment features. Does text add value to the quant model?
+market_name: PSX
+name: psx_b5_text_lm
+description: LightGBM + news sentiment (lm), mean-variance optimiser, risk engine
+model: {type: lightgbm, text_features: lm}
+costs: {commission_bps: 17.0, slippage_bps: 20.0, impact_k: 0.2, max_participation: 0.10}

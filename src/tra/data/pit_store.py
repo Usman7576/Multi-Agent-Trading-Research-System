@@ -123,6 +123,12 @@ class PITStore:
         sql = f"SELECT * FROM {self._src('news', market)} WHERE {where} ORDER BY known_at"
         return self._con.execute(sql, params).df()
 
+    def news_signals(self, market: str, as_of: pd.Timestamp) -> pd.DataFrame:
+        """Scored headlines published by ``as_of``."""
+        as_of = self._check(as_of)
+        sql = f"SELECT * FROM {self._src('news_signals', market)} WHERE known_at <= $as_of ORDER BY known_at"
+        return self._con.execute(sql, {"as_of": as_of}).df()
+
     def index_constituents(self, market: str, index: str, as_of: pd.Timestamp) -> pd.DataFrame:
         """The latest constituent snapshot of ``index`` fetched on or before ``as_of``."""
         as_of = self._check(as_of)

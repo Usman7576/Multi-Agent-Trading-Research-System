@@ -16,6 +16,7 @@ from tra.data.universe import candidate_tickers, liquidity_membership
 from tra.features import fundamental, technical
 from tra.features.cross_sectional import market_context, rank_by_date
 from tra.features.labels import forward_excess_returns
+from tra.features.text import text_features
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,12 @@ def _stock_prices(pit: PITStore, market: MarketConfig, as_of: pd.Timestamp, star
 
 
 def build_research_data(
-    pit: PITStore, market: MarketConfig, as_of: pd.Timestamp, horizon: int, start: str | None = None
+    pit: PITStore,
+    market: MarketConfig,
+    as_of: pd.Timestamp,
+    horizon: int,
+    start: str | None = None,
+    text_method: str | None = None,
 ) -> ResearchData:
     prices, stock_px, members, sectors = _stock_prices(pit, market, as_of, start)
     tickers = sorted(stock_px["ticker"].unique())
@@ -83,6 +89,11 @@ def build_research_data(
         fund = fundamental.fundamental_features(facts, stock_px, closes, splits)
         raw = tech.join(fund, how="left")
         signal_cols += [c for c in fundamental.SIGNAL_COLUMNS if raw[c].notna().any()]
+
+    if text_method:
+        news = text_features(pit.news_signals(market.name, as_of), closes, text_method)
+        raw = raw.join(news, how="left")
+        signal_cols += list(news.columns)
 
     adj = stock_px.pivot(index="date", columns="ticker", values="adj_close").sort_index()
     bench = prices[prices["ticker"] == market.benchmark].set_index("date")["adj_close"].sort_index()
