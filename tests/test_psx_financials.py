@@ -259,3 +259,27 @@ def test_split_digit_compared_with_rejoined_next_column():
 def test_eps_label_continued_on_a_bracketed_line():
     text = "(Rupees in thousand)\nProfit after taxation 8,355,000\nEarnings per share\n(basic and diluted - in Rupees) 19.07 5.71"
     assert rule_extract(text, "").eps == pytest.approx(19.07)
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        "Earning per share - basic & diluted 1.05 1.19",
+        "Basicanddilutedearmingspershare 1.05 1.19",
+        "(Loss)/earnings per share 1.05 (2.69)",
+        "Earnings / (loss) per share - basic & diluted 1.05 (0.40)",
+        "Earnings per share - basic\nand diluted (Rupees) 1.05 12.31",
+        "Earnings per share\nBasic 1.05 3.95\nDiluted 1.05 3.95",
+        "Earnings I (loss) per share -Rupees\n-Basic and diluted 1.05 (0.11)",
+        "Earningspershare-basic&diluted\nFor continuing operations 1.05 9.10",
+    ],
+)
+def test_eps_label_variants(lines):
+    assert rule_extract(
+        f"Rupees in '000\nProfit after taxation 12,000 9,000\n{lines}", ""
+    ).eps == pytest.approx(1.05)
+
+
+def test_eps_label_does_not_match_dividend_text():
+    text = "Interim dividend at Rs. 3.50 per share\nProfit after taxation 12,000 9,000"
+    assert rule_extract(text, "").eps is None
