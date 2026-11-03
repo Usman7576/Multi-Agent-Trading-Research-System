@@ -15,7 +15,7 @@ a Portfolio Manager). The LLM layer is one input among many and has to earn its 
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1 Quant core** | Point-in-time store, US data, KSE-100 snapshots, features, LightGBM, HMM regimes, backtester, optimiser, risk engine, baselines | **Done** |
-| **M2 PSX** | Own PSX scraper (prices, index, announcements, payouts, PDF reports with OCR), LDCP total-return adjustment, point-in-time liquidity universe, circuit breakers, PSX costs, PSX baselines | **Done** (report extraction run on a sample so far) |
+| **M2 PSX** | Own PSX scraper (prices, index, announcements, payouts, PDF reports with OCR), LDCP total-return adjustment, point-in-time liquidity universe, circuit breakers, PSX costs, PSX baselines | **Done**, except results-PDF extraction, which is [not reliable yet](reports/psx_report_extraction.md) |
 | M3 Text layer | News scraper, time-aware hybrid RAG with evaluation, LLM signal extraction | Planned |
 | M4 Agents | LangGraph analysts, Bull/Bear debate, Portfolio Manager, citation checks | Planned |
 | M5 Product | Daily jobs, paper trading, FastAPI, Streamlit dashboard with Decision Cards | Planned |
@@ -47,7 +47,8 @@ stocks locked at the daily circuit limit do not fill; at most 10% of a day's tra
 - **Costs decide the outcome.** Weekly rebalancing at 8.6x turnover costs 6.4% a year; at 2x costs the
   Sharpe drops to 0.33. With about half the market exposure, no strategy beat the KSE-100 during its strong
   2023-25 rally. The obvious next step is lower turnover (slower rebalancing, a larger turnover penalty).
-- **Price features only:** results-PDF fundamentals are extracted for a sample so far, not the full history.
+- **Price and liquidity features only:** results-PDF extraction is not reliable yet
+  ([sample stats](reports/psx_report_extraction.md)), so no PSX fundamentals are in these results.
 
 Full report: [`reports/psx_baselines.md`](reports/psx_baselines.md).
 
@@ -128,7 +129,7 @@ from the PSX Data Portal.
 | KSE-100 constituents | Daily snapshot (history is otherwise lost) | from Oct 2026 |
 | Company announcements | Paginated per company, exact timestamps and PDF links | ~47k for the KSE-100 names |
 | Dividends, bonus and right issues | Company payout tables | last ~2 years |
-| Financial results | Results PDFs: text or OCR (RapidOCR), rule extraction, accounting checks, local-LLM fallback | sample of 2026 reports |
+| Financial results | Results PDFs: text or OCR (RapidOCR), rule extraction, accounting checks, local-LLM fallback | Experimental: at most 11 of 40 sampled reports look right; not used in backtests |
 
 - **Endpoints and token:** the portal's own JavaScript loads tables through AJAX calls carrying an `X-Req-Id`
   token embedded in each page; the client reads it and sends it like the browser does.
@@ -157,9 +158,8 @@ Raw PSX data is never committed; only small parser fixtures are.
 ## Local LLM (no Ollama, $0)
 
 `llama-cpp-python` runs Qwen2.5-3B-Instruct (4-bit GGUF, 2.1 GB, kept in `data/models/`) on the CPU. Output
-is constrained to a Pydantic model's JSON schema, validated, retried once and cached. On noisy OCR text the 3B
-model was less accurate than the rule-based reader, so it runs only as a checked fallback and on a 1-in-20
-audit sample. Install with `uv sync --all-extras`.
+is constrained to a Pydantic model's JSON schema, validated, retried once and cached. It runs only as a checked
+fallback for report extraction, and so far it is not a useful one: it rescued 1 of 20 sampled reports. Install with `uv sync --all-extras`.
 
 ## Run it locally (Windows, no Docker)
 

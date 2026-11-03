@@ -54,6 +54,6 @@ Test period **2019-01-02 to 2026-10-30** (walk-forward, out of sample), the 60 m
 
 - **Survivorship bias:** the universe is rebuilt every day from data known that day and includes stocks that were later delisted, so there is no survivorship bias from today's index membership. Sectors come from today's symbol list, so delisted stocks are tagged 'Unknown'.
 - **Trials:** the deflated Sharpe ratio counts all 5 distinct non-benchmark configurations ever run (from the run registry in `data/state.sqlite`), including runs replaced after bug fixes. See `reports/experiment_log.md`.
-- **Fundamentals:** PSX fundamentals come from results PDFs (OCR + rules, LLM fallback). Extraction has so far run on a sample of 2026 reports only, so this run uses price and liquidity features; the next run adds earnings yield and sales-to-price once the full report history is processed.
+- **Fundamentals:** PSX fundamentals come from results PDFs (OCR + rules, LLM fallback). Extraction is not reliable yet (see `psx_report_extraction.md`), so this run uses price and liquidity features only.
 
 ![Equity curves](psx_equity.png)

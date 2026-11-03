@@ -92,6 +92,7 @@ def main() -> None:
     parser.add_argument(
         "--symbols", default=None, help="Comma-separated symbols, or 'kse100' (default: universe)"
     )
+    parser.add_argument("--write-facts", action="store_true", help="Feed extracted results to backtests")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -134,9 +135,11 @@ def main() -> None:
             llm = LocalLLM(model, settings.data_dir / "cache" / "llm.sqlite")
         todo = result_announcements(lake, symbols(), str(args.since))
         process_reports(client, lake, raw, todo, llm)
-        facts = results_to_facts(lake.read("psx_results", "PSX"))
-        if not facts.empty:
-            lake.upsert("fundamentals", "PSX", facts)
+        # Extracted figures reach backtests only on request: see reports/psx_report_extraction.md
+        if args.write_facts:
+            facts = results_to_facts(lake.read("psx_results", "PSX"))
+            if not facts.empty:
+                lake.upsert("fundamentals", "PSX", facts)
 
 
 if __name__ == "__main__":
