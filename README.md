@@ -15,7 +15,7 @@ a Portfolio Manager). The LLM layer is one input among many and has to earn its 
 | Milestone | Scope | Status |
 |---|---|---|
 | **M1 Quant core** | Point-in-time store, US data, KSE-100 snapshots, features, LightGBM, HMM regimes, backtester, optimiser, risk engine, baselines | **Done** |
-| **M2 PSX** | Own PSX scraper (prices, index, announcements, payouts, PDF reports with OCR), LDCP total-return adjustment, point-in-time liquidity universe, circuit breakers, PSX costs, PSX baselines | **Done**. Results-PDF extraction [answers about half of reports](reports/psx_report_extraction.md) and is not yet used in backtests |
+| **M2 PSX** | Own PSX scraper (prices, index, announcements, payouts, PDF reports with OCR), LDCP total-return adjustment, point-in-time liquidity universe, circuit breakers, PSX costs, PSX baselines | **Merged**, with fundamentals in progress: results-PDF extraction [answers about 65% of unseen reports](reports/psx_report_extraction.md) and is not used in backtests |
 | M3 Text layer | News scraper, time-aware hybrid RAG with evaluation, LLM signal extraction | Planned |
 | M4 Agents | LangGraph analysts, Bull/Bear debate, Portfolio Manager, citation checks | Planned |
 | M5 Product | Daily jobs, paper trading, FastAPI, Streamlit dashboard with Decision Cards | Planned |
@@ -47,7 +47,7 @@ stocks locked at the daily circuit limit do not fill; at most 10% of a day's tra
 - **Costs decide the outcome.** Weekly rebalancing at 8.6x turnover costs 6.4% a year; at 2x costs the
   Sharpe drops to 0.33. With about half the market exposure, no strategy beat the KSE-100 during its strong
   2023-25 rally. The obvious next step is lower turnover (slower rebalancing, a larger turnover penalty).
-- **Price and liquidity features only:** results-PDF extraction covers only about half of reports so far
+- **Price and liquidity features only:** results-PDF extraction is not accurate enough to use yet
   ([measured accuracy](reports/psx_report_extraction.md)), so no PSX fundamentals are in these results.
 
 Full report: [`reports/psx_baselines.md`](reports/psx_baselines.md).
@@ -129,7 +129,7 @@ from the PSX Data Portal.
 | KSE-100 constituents | Daily snapshot (history is otherwise lost) | from Oct 2026 |
 | Company announcements | Paginated per company, exact timestamps and PDF links | ~47k for the KSE-100 names |
 | Dividends, bonus and right issues | Company payout tables | last ~2 years |
-| Financial results | Results PDFs: text or OCR (RapidOCR), rule extraction, accounting checks, local-LLM fallback | Held-out test: 22 of 40 correct, 0 flagged wrong, 18 no result; not yet used in backtests |
+| Financial results | Results PDFs: text or OCR (RapidOCR), rule extraction, accounting checks, local-LLM fallback | Held-out test: 21 of 40 correct, 5 wrong, 14 no answer; not used in backtests |
 
 - **Endpoints and token:** the portal's own JavaScript loads tables through AJAX calls carrying an `X-Req-Id`
   token embedded in each page; the client reads it and sends it like the browser does.
