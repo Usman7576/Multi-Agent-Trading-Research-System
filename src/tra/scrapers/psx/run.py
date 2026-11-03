@@ -29,7 +29,7 @@ from tra.scrapers.psx.client import USER_AGENT, PSXClient
 from tra.scrapers.psx.fetch_announcements import fetch_announcements, fetch_payouts
 from tra.scrapers.psx.fetch_constituents import snapshot_constituents
 from tra.scrapers.psx.fetch_prices import fetch_datewise, fetch_index_history, fetch_symbols, weekdays
-from tra.scrapers.psx.fetch_reports import process_reports, result_announcements
+from tra.scrapers.psx.fetch_reports import fetch_company_shares, process_reports, result_announcements
 from tra.state import StateDB
 
 DATASETS = [
@@ -41,6 +41,7 @@ DATASETS = [
     "announcements",
     "payouts",
     "reports",
+    "shares",
     "daily",
 ]
 
@@ -128,6 +129,8 @@ def main() -> None:
         fetch_announcements(client, lake, symbols())
     if args.dataset in {"payouts", "daily"}:
         fetch_payouts(client, lake, symbols())
+    if args.dataset == "shares":
+        fetch_company_shares(client, lake, symbols())
     if args.dataset in {"reports", "daily"}:
         llm = None
         model = settings.data_dir / "models" / DEFAULT_MODEL

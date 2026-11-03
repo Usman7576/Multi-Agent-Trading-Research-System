@@ -7,6 +7,7 @@ when a local model is given, by the LLM as well. One row per announcement goes t
 
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import Iterable
 from pathlib import Path
@@ -15,11 +16,41 @@ import pandas as pd
 
 from tra.data.lake import ParquetLake
 from tra.data.psx_financials import agreement, llm_extract, needs_llm, pdf_text, rule_extract, to_record
+from tra.scrapers.common.http import HttpError
 from tra.scrapers.psx.client import PSXClient
-from tra.scrapers.psx.parsers.announcements import inferred_period_end, is_results_title, result_period_end
+from tra.scrapers.psx.parsers.announcements import (
+    inferred_period_end,
+    is_results_title,
+    parse_company_profile,
+    result_period_end,
+)
 
 log = logging.getLogger(__name__)
 MARKET = "PSX"
+
+
+def report_text(path: Path) -> tuple[str, str]:
+    """Text of an archived PDF, cached next to it because OCR takes about a minute per report."""
+    cache = path.with_suffix(".text.json")
+    if cache.exists():
+        saved = json.loads(cache.read_text(encoding="utf-8"))
+        return saved["text"], saved["method"]
+    try:
+        text, method = pdf_text(path.read_bytes())
+    except Exception as exc:  # corrupt or encrypted PDF: record it, never guess
+        log.warning("%s: unreadable PDF (%s)", path.name, exc)
+        return "", "unreadable"
+    cache.write_text(json.dumps({"text": text, "method": method}), encoding="utf-8")
+    return text, method
+
+
+def fetch_company_shares(client: PSXClient, lake: ParquetLake, symbols: Iterable[str]) -> pd.DataFrame:
+    """Today's total shares and face value per company, an independent check on extracted profit and EPS."""
+    rows = [{"symbol": s, **parse_company_profile(client.get_page(f"/company/{s}"), s)} for s in symbols]
+    df = pd.DataFrame(rows)
+    df["snapshot_date"] = pd.Timestamp.now(tz="Asia/Karachi").normalize().tz_localize(None)
+    lake.upsert("company_profiles", MARKET, df)
+    return df
 
 
 def result_announcements(lake: ParquetLake, symbols: Iterable[str], since: str) -> pd.DataFrame:
@@ -56,13 +87,14 @@ def process_reports(
             continue
         path = raw_dir / "reports" / a.symbol / f"{a.announcement_id}.pdf"
         if not path.exists():
+            try:
+                body = client.download(a.doc_path)
+            except HttpError as exc:  # not stored, so the next run tries this report again
+                log.warning("%s %s: download failed, skipping (%s)", a.symbol, a.announcement_id, exc)
+                continue
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(client.download(a.doc_path))
-        try:
-            text, text_method = pdf_text(path.read_bytes())
-        except Exception as exc:  # corrupt or encrypted PDF: record it, never guess
-            log.warning("%s %s: unreadable PDF (%s)", a.symbol, a.announcement_id, exc)
-            text, text_method = "", "unreadable"
+            path.write_bytes(body)
+        text, text_method = report_text(path)
         rules = rule_extract(text, a.title)
         final, method = rules, "rules"
         rec: dict[str, object] = {
@@ -76,7 +108,7 @@ def process_reports(
         }
         fallback = needs_llm(rules)
         audit = len(rows) % audit_every == 0  # a sample where both run, to measure agreement
-        if llm is not None and text_method in {"text", "ocr"} and (fallback or audit):
+        if llm is not None and text_method in {"text", "ocr", "mixed"} and (fallback or audit):
             try:
                 # units are a document-level fact detected deterministically; the 3B model often misses them
                 model = llm_extract(llm, text, a.title).model_copy(update={"unit": rules.unit})

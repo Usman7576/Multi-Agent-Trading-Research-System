@@ -162,3 +162,100 @@ def test_period_length_comes_from_statement_headers_for_quarterly_titles():
         ).period_months
         == 12
     )
+
+
+def _shares(x):
+    return x.profit_after_tax / x.eps
+
+
+def test_note_number_is_not_read_as_eps():
+    text = "Rupees in '000\nPROFIT AFTER TAXATION 12,800,695 13,811,871\nBasic and diluted earnings per share 36 10.80 11.65"
+    x = rule_extract(text, "Financial Results for the Quarter Ended 2026-03-31")
+    assert x.eps == pytest.approx(10.80) and x.profit_after_tax == 12_800_695
+
+
+def test_digits_split_by_pdf_text_are_rejoined():
+    text = (
+        "(Rupees '000)\nProfit for the period 4 2,243,957 47,149,242\n"
+        "Earnings per share -basic and diluted (Rupees) 21 9 .82 10.96"
+    )
+    x = rule_extract(text, "Financial Results for the Period Ended 2026-03-31")
+    assert x.profit_after_tax == 42_243_957 and x.eps == pytest.approx(9.82)
+
+
+def test_note_before_a_figure_is_not_merged_into_it():
+    text = "(Rupees '000)\nProfit for the period 4 2,243,957 2,100,000\nEarnings per share 1.05 0.98"
+    assert rule_extract(text, "").profit_after_tax == 2_243_957
+
+
+def test_eps_on_the_line_after_its_label():
+    text = "(Amounts in thousand)\nProfit for the period 15,096,550 65,287,307\nEarnings per share - basic\n-Rupees-\n5.06 22.17"
+    x = rule_extract(text, "")
+    assert x.eps == pytest.approx(5.06) and x.unit == "PKR_000"
+
+
+@pytest.mark.parametrize(
+    ("header", "unit"),
+    [
+        ("(Amounts in thousand)", "PKR_000"),
+        ("--(Rupees in.oo0)--", "PKR_000"),
+        ("Rupeesin'00...", "PKR_000"),
+        ("Rupees in million", "PKR_mn"),
+        ("Note Rupees Rupees", "PKR"),
+    ],
+)
+def test_unit_headers(header, unit):
+    assert (
+        rule_extract(f"{header}\nProfit after taxation 12,000 9,000\nEarnings per share 1.20 0.90", "").unit
+        == unit
+    )
+
+
+def test_prose_amount_is_not_a_unit_header():
+    text = "Revenue of Rs. 986 million was recorded\nRupees\nProfit after taxation 6,050,394,226\nEarnings per share 3.95"
+    assert rule_extract(text, "").unit == "PKR"
+
+
+def test_figures_come_from_the_statement_holding_eps():
+    text = (
+        "Rupees in '000\nProfit for the period - - 999,999\nOther lines\nProfit after taxation 8,400,000 6,650,000\n"
+        "Earnings per share 28.75 22.76\nProfit for the period 111,111"
+    )
+    assert rule_extract(text, "").profit_after_tax == 8_400_000
+
+
+@pytest.mark.parametrize(
+    ("header", "months"),
+    [
+        ("Quarter ended March 31 Nine months ended March 31", 3),
+        ("Nine months ended March 31 Quarter ended March 31", 9),
+    ],
+)
+def test_first_column_decides_period_length(header, months):
+    text = f"{header}\nProfit after taxation 42,000 41,000 115,000 129,000\nEarnings per share 9.82 10.96 26.80 30.13"
+    assert rule_extract(text, "Financial Results for the Period Ended 2026-03-31").period_months == months
+
+
+def test_ocr_boxes_on_a_tilted_row_stay_on_one_line():
+    from tra.data.psx_financials import group_ocr_lines
+
+    def box(x, y):
+        return [[x, y], [x + 50, y], [x + 50, y + 20], [x, y + 20]]
+
+    boxes = [
+        (box(300, 106), "12,800,695", 0.9),
+        (box(10, 100), "Profit after tax", 0.9),
+        (box(10, 140), "EPS", 0.9),
+    ]
+    assert group_ocr_lines(boxes) == ["Profit after tax 12,800,695", "EPS"]
+
+
+def test_split_digit_compared_with_rejoined_next_column():
+    text = "(Rupees '000)\nPROFIT FOR THE PERIOD 1 7,476,826 1 3,277,822\nEarnings per share (Rupees) 1 2.14 9 .33"
+    x = rule_extract(text, "")
+    assert x.profit_after_tax == 17_476_826 and x.eps == pytest.approx(12.14)
+
+
+def test_eps_label_continued_on_a_bracketed_line():
+    text = "(Rupees in thousand)\nProfit after taxation 8,355,000\nEarnings per share\n(basic and diluted - in Rupees) 19.07 5.71"
+    assert rule_extract(text, "").eps == pytest.approx(19.07)

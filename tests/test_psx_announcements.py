@@ -105,3 +105,38 @@ def test_undated_results_titles_get_an_inferred_quarter_end():
 )
 def test_more_title_variants(title, expected):
     assert result_period_end(title) == pd.Timestamp(expected)
+
+
+def test_board_meeting_notices_are_not_results():
+    from tra.scrapers.psx.parsers.announcements import is_results_title
+
+    assert not is_results_title(
+        "Board Meeting for the announcement of the financial results for the first quarter"
+    )
+    assert is_results_title("Financial Results for the First Quarter Ended March 31, 2026")
+
+
+def test_company_profile_reads_shares_and_face_value():
+    from tra.scrapers.psx.parsers.announcements import parse_company_profile
+
+    html = "<div><div>Shares</div><div>1,185,060,006</div><div>Face Value</div><div>10.00</div></div>"
+    assert parse_company_profile(html, "MCB") == {"total_shares": 1185060006.0, "face_value": 10.0}
+
+
+def test_failed_pdf_download_skips_that_report(tmp_path):
+    from tra.scrapers.common.http import HttpError
+    from tra.scrapers.psx.fetch_reports import process_reports
+
+    client = MagicMock(spec=PSXClient)
+    client.download.side_effect = HttpError("network down")
+    ann = pd.DataFrame(
+        {
+            "announcement_id": ["1"],
+            "symbol": ["LUCK"],
+            "title": ["Financial Results for the Quarter Ended 2026-09-30"],
+            "period_end": [pd.Timestamp("2026-09-30")],
+            "known_at": [pd.Timestamp("2026-10-29", tz="UTC")],
+            "doc_path": ["/download/document/1.pdf"],
+        }
+    )
+    assert process_reports(client, ParquetLake(tmp_path), tmp_path / "raw", ann).empty
