@@ -17,7 +17,12 @@ AMBIGUOUS_TICKERS = {
     "NML", "OGDC", "PACE", "PIA", "POL", "POWER", "PSO", "PSX", "PTC", "SBP", "SECP", "SYS", "TRG", "UBL",
 }  # fmt: skip
 # Names that are also ordinary phrases once 'Limited' is removed
-GENERIC_NAMES = {"power cement", "image pakistan", "the bank of punjab"}
+GENERIC_NAMES = {
+    "power cement",
+    "image pakistan",
+    "the bank of punjab",
+    "pakistan stock exchange",  # headlines naming the exchange are market news, not news about the listed company
+}
 # Common short forms used by Pakistani business press
 ALIASES = {
     "OGDC": ["OGDCL", "Oil and Gas Development"],

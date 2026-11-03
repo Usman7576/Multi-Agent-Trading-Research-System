@@ -20,6 +20,7 @@ RSS = b"""<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org
 <item><title>Bad date</title><link>https://x.pk/c</link><pubDate>soon</pubDate></item>
 </channel></rss>"""
 NAMES = {
+    "PSX": "Pakistan Stock Exchange Limited",
     "LUCK": "Lucky Cement Limited",
     "POWER": "Power Cement Limited",
     "HBL": "Habib Bank Limited",
@@ -82,6 +83,7 @@ def test_company_search_name(name, short):
         ("EFERT rises 3pc while Engro Holdings falls", {"EFERT", "ENGROH"}),
         ("Luck ran out for the market", set()),  # a ticker that is an ordinary word
         ("Power shortages hit cement makers", set()),
+        ("Pakistan Stock Exchange gains 1,400 points", set()),  # market news, not the listed company
         ("Attock Refinery shuts a unit", set()),  # the name belongs to two symbols, so it identifies neither
     ],
 )
