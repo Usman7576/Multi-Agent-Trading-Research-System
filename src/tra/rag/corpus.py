@@ -22,6 +22,12 @@ OVERLAP_WORDS = 40
 # Routine notices that would crowd search results without saying anything about the business
 NOISE_TITLES = re.compile(r"disclosure of interest|transmission of|notice of|credit of|book closure", re.I)
 COLUMNS = ["chunk_id", "doc_id", "symbol", "doc_type", "title", "text", "known_at", "url"]
+_GLUED = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z]{2})")
+
+
+def unglue(text: str) -> str:
+    """PDF text often loses spaces ('Sections96and131ofthe'). Restores those visible from case and digits."""
+    return _GLUED.sub(" ", text)
 
 
 def split_words(text: str, window: int = WINDOW_WORDS, overlap: int = OVERLAP_WORDS) -> list[str]:
@@ -45,7 +51,7 @@ def announcement_chunks(announcements: pd.DataFrame, raw_dir: Path, since: str) 
         doc = str(a.announcement_id)
         cache = raw_dir / "reports" / a.symbol / f"{doc}.text.json"
         text = json.loads(cache.read_text(encoding="utf-8"))["text"] if cache.exists() else ""
-        parts = split_words(text) or [a.title]
+        parts = split_words(unglue(text)) or [a.title]
         url = f"https://dps.psx.com.pk{a.doc_path}" if isinstance(a.doc_path, str) else ""
         for n, part in enumerate(parts):
             rows.append(

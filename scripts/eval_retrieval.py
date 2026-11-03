@@ -99,8 +99,8 @@ def main() -> None:
     lines += ["", "Recall@5 by question type:", "", *kind_table(kinds), ""]
     lines += [
         "**Limits.** Claude wrote and labelled these questions after reading the documents; no independent "
-        "person checked them. A question written from a document tends to share its words, which favours "
-        "BM25. Gold labels list the documents found to answer each question, not every document that might, so "
+        "person checked them. A question written from a document tends to share its words, favouring "
+        "BM25. Gold labels list the documents found to answer each question, not all that might, so "
         "Recall can understate. Choosing the best mode on this set makes its number optimistic.",
         "",
     ]

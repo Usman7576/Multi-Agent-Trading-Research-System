@@ -6,7 +6,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from tra.rag.corpus import announcement_chunks, news_chunks, split_words
+from tra.rag.corpus import announcement_chunks, news_chunks, split_words, unglue
 from tra.rag.evaluate import ndcg_at_k, recall_at_k, reciprocal_rank, unique_docs
 from tra.rag.retrieve import HybridRetriever, reciprocal_rank_fusion, tokenize
 
@@ -150,3 +150,8 @@ def test_retrieval_metrics_by_hand():
     assert reciprocal_rank(ranked, gold) == 0.5 and reciprocal_rank(ranked, {"z"}) == 0.0
     assert ndcg_at_k(["b", "x"], {"b"}, 10) == 1.0
     assert 0 < ndcg_at_k(["x", "b"], {"b"}, 10) < 1.0
+
+
+def test_unglue_restores_spaces_lost_in_pdfs():
+    assert unglue("Sections96and131 ofTheAct") == "Sections 96 and 131 of The Act"
+    assert unglue("Rs.5 Q3 2026 30th PSX") == "Rs.5 Q3 2026 30th PSX"
