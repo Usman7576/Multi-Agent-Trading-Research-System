@@ -59,7 +59,7 @@ def test_old_news_fades_towards_new_news():
     s = _signals([("a", "LUCK", DAYS[5], 0.0, 1.0), ("b", "LUCK", DAYS[20], 0.0, -1.0)])
     s["known_at"] = pd.to_datetime(s["known_at"]).dt.tz_localize("UTC")
     f = text_features(s, CLOSES, "llm").xs("LUCK", level="ticker")["news_llm_sentiment"]
-    assert f.loc[DAYS[10]] == pytest.approx(1.0) and f.loc[DAYS[20]] < 0 < f.loc[DAYS[19]]
+    assert f.loc[DAYS[10]] == pytest.approx(0.5) and f.loc[DAYS[20]] < 0 < f.loc[DAYS[19]]
 
 
 def test_no_scored_news_gives_no_features():

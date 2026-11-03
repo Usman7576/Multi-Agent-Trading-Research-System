@@ -7,6 +7,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from tra.rag.corpus import announcement_chunks, news_chunks, split_words
+from tra.rag.evaluate import ndcg_at_k, recall_at_k, reciprocal_rank, unique_docs
 from tra.rag.retrieve import HybridRetriever, reciprocal_rank_fusion, tokenize
 
 
@@ -139,3 +140,13 @@ def test_body_only_news_links_without_text_are_skipped():
         "text": ["", ""], "known_at": [t, t], "url": ["u", "v"],
     })  # fmt: skip
     assert [r["doc_id"] for r in news_chunks(news, "2018-01-01")] == ["a"]
+
+
+def test_retrieval_metrics_by_hand():
+    ranked = unique_docs(["a", "a", "b", "c", "d"])
+    assert ranked == ["a", "b", "c", "d"]
+    gold = {"b", "z"}
+    assert recall_at_k(ranked, gold, 2) == 0.5 and recall_at_k(ranked, gold, 1) == 0.0
+    assert reciprocal_rank(ranked, gold) == 0.5 and reciprocal_rank(ranked, {"z"}) == 0.0
+    assert ndcg_at_k(["b", "x"], {"b"}, 10) == 1.0
+    assert 0 < ndcg_at_k(["x", "b"], {"b"}, 10) < 1.0

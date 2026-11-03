@@ -71,7 +71,8 @@ def lm_polarity(titles: list[str]) -> list[float]:
 def score_headlines(lake: ParquetLake, llm: LocalLLM | None, limit: int | None = None) -> pd.DataFrame:
     """Score title-linked headlines not yet scored by the requested methods. Resumable."""
     news = lake.read("news", MARKET)
-    news = news[news["in_title"]].drop_duplicates(["doc_id", "symbol"])
+    news = news[news["in_title"] & ~news["title"].str.contains("sponsored", case=False)]
+    news = news.drop_duplicates(["doc_id", "symbol"])
     done = lake.read("news_signals", MARKET) if lake.exists("news_signals", MARKET) else pd.DataFrame()
     if done.empty:
         base = news[["doc_id", "symbol", "known_at", "title"]].assign(

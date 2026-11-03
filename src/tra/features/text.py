@@ -37,10 +37,12 @@ def text_features(signals: pd.DataFrame, closes: pd.Series, method: str) -> pd.D
     daily = frame.groupby(["date", "ticker"])["score"].agg(["mean", "count"]).unstack("ticker")
     mean = daily["mean"].reindex(sessions.index)
     count = daily["count"].reindex(sessions.index).fillna(0.0)
-    # Weighted by number of headlines through the decayed sum, and undefined until a company has any news
-    weights = count.ewm(halflife=HALF_LIFE, adjust=True).mean()
-    values = (mean.fillna(0.0) * count).ewm(halflife=HALF_LIFE, adjust=True).mean()
-    sentiment = (values / weights.where(weights > 0)).where(count.cumsum() > 0)
+    # Decayed sum of headline scores, so stale news fades to neutral; undefined until a company has any news
+    keep = 0.5 ** (1 / HALF_LIFE)
+    total = (mean.fillna(0.0) * count).to_numpy(copy=True)
+    for i in range(1, len(total)):
+        total[i] += keep * total[i - 1]
+    sentiment = pd.DataFrame(total, index=mean.index, columns=mean.columns).where(count.cumsum() > 0)
     out = pd.DataFrame(
         {
             columns[0]: sentiment.stack(future_stack=True),
