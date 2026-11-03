@@ -31,4 +31,4 @@ Same strategy settings as the US run; PSX market file adds the point-in-time liq
 | 3 | Volume-participation cap applies to stocks only | **Bug fix.** The cap gave the KSE-100 index (no traded value) a zero order size, so the benchmark held cash. | Benchmark Sharpe 1.06 |
 | 4 | Run registry records full experiment names | **Bug fix.** PSX runs had been filed under US names; 8 registry rows corrected by config hash. Undefined Sharpes excluded from trial counts. US results unaffected (produced earlier). | Trial counts per market correct |
 | 5 | Full run including LightGBM crashed (out of memory) | OCR/LLM sample ran at the same time on a 16 GB machine | No results recorded |
-| 6 | Full run, nothing else running | Planned | Strategy 4 Sharpe 0.90, DSR 0.985 (5 trials); see `psx_baselines.md` |
+| 6 | Full run, nothing else running | Planned | Strategy 4 Sharpe 0.90, DSR 0.985 (5 trials); see `psx_baselines.md`. Used 20 price and liquidity features, no PDF fundamentals |
