@@ -9,6 +9,7 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from tra.scrapers.common.drift import DriftError, require_headers
+from tra.scrapers.common.parse_number import parse_number
 
 TIMEZONE = "Asia/Karachi"
 _TOTAL = re.compile(r"of\s+([\d,]+)\s+entries")
@@ -115,9 +116,9 @@ def result_period_end(title: str) -> pd.Timestamp | None:
 
 
 def is_results_title(title: str) -> bool:
-    """A financial results announcement (not a 'board meeting other than financial results' notice)."""
+    """A financial results announcement, not a notice of a board meeting that will consider results."""
     return bool(re.search(r"financial\s+results?", title, re.IGNORECASE)) and not re.search(
-        r"other\s+th[ae]n", title, re.IGNORECASE
+        r"other\s+th[ae]n|board\s+meeting", title, re.IGNORECASE
     )
 
 
@@ -163,3 +164,15 @@ def parse_company_payouts(html: str, symbol: str, source: str = "payouts") -> pd
                 }
             )
     return pd.DataFrame(rows)
+
+
+def parse_company_profile(html: str, symbol: str = "") -> dict[str, float]:
+    """Total shares and face value from a company page's equity section."""
+    soup = BeautifulSoup(html, "lxml")
+    words = list(soup.stripped_strings)
+    out: dict[str, float] = {}
+    for label, key in (("Shares", "total_shares"), ("Face Value", "face_value")):
+        if label not in words or words.index(label) + 1 >= len(words):
+            raise DriftError(f"company page {symbol}: '{label}' not found")
+        out[key] = parse_number(words[words.index(label) + 1])
+    return out
