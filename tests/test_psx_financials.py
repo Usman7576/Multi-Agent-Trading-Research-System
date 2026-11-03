@@ -248,3 +248,14 @@ def test_ocr_boxes_on_a_tilted_row_stay_on_one_line():
         (box(10, 140), "EPS", 0.9),
     ]
     assert group_ocr_lines(boxes) == ["Profit after tax 12,800,695", "EPS"]
+
+
+def test_split_digit_compared_with_rejoined_next_column():
+    text = "(Rupees '000)\nPROFIT FOR THE PERIOD 1 7,476,826 1 3,277,822\nEarnings per share (Rupees) 1 2.14 9 .33"
+    x = rule_extract(text, "")
+    assert x.profit_after_tax == 17_476_826 and x.eps == pytest.approx(12.14)
+
+
+def test_eps_label_continued_on_a_bracketed_line():
+    text = "(Rupees in thousand)\nProfit after taxation 8,355,000\nEarnings per share\n(basic and diluted - in Rupees) 19.07 5.71"
+    assert rule_extract(text, "").eps == pytest.approx(19.07)

@@ -156,7 +156,7 @@ _NUMBER = re.compile(r"\(?-?[\d,]*\d(?:\.\d+)?\)?")
 _UNITS = [
     (
         re.compile(
-            r"(?:rupees?|rs\.?|pkr|amounts?)(?:are)?(?:in)?['\"`’‘.(]*(?:thousands?|0[0o]{1,2}|o[0o]{1,2})"
+            r"(?:rupees?|rs\.?|\(r|pkr|amounts?)(?:are)?(?:in)?['\"`’‘.(]*(?:thousands?|0[0o]{1,2}|o[0o]{1,2})"
         ),
         "PKR_000",
     ),
@@ -207,10 +207,12 @@ def _first_figure(line: str, is_eps: bool) -> float | None:
         if real(tok):
             value = _value(tok)
             if k > 0 and re.fullmatch(r"\d", tokens[k - 1]):
-                next_real = next((t for t in tokens[k + 1 :] if real(t)), None)
+                later = next((j for j in range(k + 1, len(tokens)) if real(tokens[j])), None)
                 merged = _value(tokens[k - 1] + tok.strip("()-"))
-                if next_real and value and _value(next_real):
-                    other = abs(_value(next_real))
+                if later is not None and value and _value(tokens[later]):
+                    other = abs(_value(tokens[later]))
+                    if re.fullmatch(r"\d", tokens[later - 1]) and later - 1 > k:
+                        other = abs(_value(tokens[later - 1] + tokens[later].strip("()-")))
                     if abs(math.log(merged / other)) < abs(math.log(abs(value) / other)):
                         return -merged if value < 0 else merged
             return value
@@ -223,6 +225,8 @@ def _figure_at(lines: list[str], i: int, is_eps: bool) -> float | None:
     if value is not None:
         return value
     for line in lines[i + 1 : i + 4]:
+        if line.lstrip()[:1] in "(-" and (value := _first_figure(line, is_eps)) is not None:
+            return value
         if re.search(r"[a-z]{4,}", line.lower()) and not re.fullmatch(
             r"[\W\d]*(?:rupees?|rs)[\W\d]*", line.lower()
         ):

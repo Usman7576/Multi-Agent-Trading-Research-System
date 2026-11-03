@@ -5,6 +5,12 @@ Uses archived PDFs and cached text only, so no network and no OCR are needed onc
 
     uv run python scripts/eval_report_extraction.py --since 2026-01-01 --symbols LUCK,MCB
     uv run python scripts/eval_report_extraction.py --since 2025-01-01 --until 2025-12-31 --symbols kse100 -v
+
+Held-out scoring: --sample picks reports at random before any is read, --exclude keeps out the companies the
+rules were tuned on, and --process downloads and reads the chosen reports first.
+
+    uv run --all-extras python scripts/eval_report_extraction.py --since 2026-01-01 --symbols kse100 \\
+        --exclude LUCK,MCB --sample 40 --seed 1 --process
 """
 
 from __future__ import annotations
@@ -18,17 +24,31 @@ import pandas as pd
 from tra.config import Settings
 from tra.data.lake import ParquetLake
 from tra.data.psx_financials import UNIT_MULTIPLIER, accounting_checks, rule_extract
-from tra.scrapers.psx.fetch_reports import result_announcements
+from tra.scrapers.common.http import HttpClient
+from tra.scrapers.psx.client import USER_AGENT, PSXClient
+from tra.scrapers.psx.fetch_reports import process_reports, result_announcements
 
 TOLERANCE = 0.25  # shares change with bonus issues, and consolidated EPS excludes minority interests
 
 
 def evaluate(
-    lake: ParquetLake, raw_dir: Path, symbols: list[str], since: str, until: str | None
+    lake: ParquetLake,
+    raw_dir: Path,
+    symbols: list[str],
+    since: str,
+    until: str | None,
+    sample: int | None = None,
+    seed: int = 1,
+    process: bool = False,
 ) -> pd.DataFrame:
     ann = result_announcements(lake, symbols, since)
     if until:
         ann = ann[ann["period_end"] <= pd.Timestamp(until)]
+    if sample:
+        ann = ann.sample(min(sample, len(ann)), random_state=seed).sort_values(["symbol", "known_at"])
+    if process:
+        http = HttpClient(USER_AGENT, requests_per_second=1.0, timeout_seconds=120)
+        process_reports(PSXClient(http), lake, raw_dir, ann)
     prof = lake.read("company_profiles", "PSX").sort_values("snapshot_date").groupby("symbol").last()
     rows = []
     for a in ann.itertuples(index=False):
@@ -63,6 +83,10 @@ def main() -> None:
     parser.add_argument("--since", required=True)
     parser.add_argument("--until", default=None)
     parser.add_argument("--symbols", required=True, help="Comma-separated, or 'kse100'")
+    parser.add_argument("--exclude", default="", help="Comma-separated companies to leave out")
+    parser.add_argument("--sample", type=int, default=None, help="Random sample size")
+    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--process", action="store_true", help="Download and read the chosen reports first")
     parser.add_argument("-v", action="store_true", help="List every report")
     args = parser.parse_args()
     settings = Settings()
@@ -72,7 +96,17 @@ def main() -> None:
         symbols = sorted(snap.loc[snap["snapshot_date"] == snap["snapshot_date"].max(), "symbol"])
     else:
         symbols = args.symbols.split(",")
-    df = evaluate(lake, settings.data_dir / "raw" / "psx", symbols, args.since, args.until)
+    symbols = [s for s in symbols if s not in set(args.exclude.split(","))]
+    df = evaluate(
+        lake,
+        settings.data_dir / "raw" / "psx",
+        symbols,
+        args.since,
+        args.until,
+        args.sample,
+        args.seed,
+        args.process,
+    )
     good = (df["ratio"] - 1).abs() <= TOLERANCE
     missing = df["ratio"].isna()
     if args.v:
