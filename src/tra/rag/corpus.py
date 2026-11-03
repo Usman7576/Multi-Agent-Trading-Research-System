@@ -22,7 +22,7 @@ OVERLAP_WORDS = 40
 # Routine notices that would crowd search results without saying anything about the business
 NOISE_TITLES = re.compile(r"disclosure of interest|transmission of|notice of|credit of|book closure", re.I)
 COLUMNS = ["chunk_id", "doc_id", "symbol", "doc_type", "title", "text", "known_at", "url"]
-_GLUED = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?=[a-z]{2})")
+_GLUED = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?!(?:st|nd|rd|th)\b)(?=[a-z]{2})")
 
 
 def unglue(text: str) -> str:
