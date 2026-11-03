@@ -1,6 +1,6 @@
 # PSX results-PDF extraction: measured accuracy
 
-Measured 2026-11-04 with rules frozen at commit `f79f815`, rules only (no LLM).
+Measured 2026-11-03 with rules frozen at commit `f79f815`, rules only (no LLM).
 **Status: when it answers, it is usually right, but it answers on only about half of reports. Extracted figures are
 not used in any backtest yet.**
 
