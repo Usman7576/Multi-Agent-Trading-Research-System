@@ -20,8 +20,9 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import yaml
 
-from tra.config import Settings
+from tra.config import CONFIG_DIR, Settings
 from tra.data.lake import ParquetLake
 from tra.data.psx_financials import UNIT_MULTIPLIER, accounting_checks, rule_extract
 from tra.scrapers.common.http import HttpClient
@@ -40,8 +41,10 @@ def evaluate(
     sample: int | None = None,
     seed: int = 1,
     process: bool = False,
+    skip_ids: set[str] | None = None,
 ) -> pd.DataFrame:
     ann = result_announcements(lake, symbols, since)
+    ann = ann[~ann["announcement_id"].astype(str).isin(skip_ids or set())]
     if until:
         ann = ann[ann["period_end"] <= pd.Timestamp(until)]
     if sample:
@@ -84,6 +87,8 @@ def main() -> None:
     parser.add_argument("--until", default=None)
     parser.add_argument("--symbols", required=True, help="Comma-separated, or 'kse100'")
     parser.add_argument("--exclude", default="", help="Comma-separated companies to leave out")
+    parser.add_argument("--set", default=None, help="Company set from configs/psx_extraction_sets.yaml")
+    parser.add_argument("--fresh", action="store_true", help="Leave out reports already used for scoring")
     parser.add_argument("--sample", type=int, default=None, help="Random sample size")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--process", action="store_true", help="Download and read the chosen reports first")
@@ -97,6 +102,10 @@ def main() -> None:
     else:
         symbols = args.symbols.split(",")
     symbols = [s for s in symbols if s not in set(args.exclude.split(","))]
+    sets = yaml.safe_load((CONFIG_DIR / "psx_extraction_sets.yaml").read_text(encoding="utf-8"))
+    if args.set:
+        symbols = [s for s in symbols if s in set(sets[args.set])]
+    skip = set(sets["scored_report_ids"]) if args.fresh else set()
     df = evaluate(
         lake,
         settings.data_dir / "raw" / "psx",
@@ -106,6 +115,7 @@ def main() -> None:
         args.sample,
         args.seed,
         args.process,
+        skip,
     )
     good = (df["ratio"] - 1).abs() <= TOLERANCE
     missing = df["ratio"].isna()
