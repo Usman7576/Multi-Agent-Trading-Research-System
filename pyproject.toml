@@ -95,3 +95,4 @@ known-first-party = ["tra", "tests"]
 [tool.ruff.lint.per-file-ignores]
 "tests/test_psx_financials.py" = ["E501"]  # statement text used as fixtures
 "tests/test_news.py" = ["E501"]  # feed text used as fixtures
+"tests/test_rag.py" = ["E501"]

@@ -21,7 +21,7 @@ GENERIC_NAMES = {
     "power cement",
     "image pakistan",
     "the bank of punjab",
-    "pakistan stock exchange",  # headlines naming the exchange are market news, not news about the listed company
+    "pakistan stock exchange",  # headlines naming the exchange are market news, not company news
 }
 # Common short forms used by Pakistani business press
 ALIASES = {
