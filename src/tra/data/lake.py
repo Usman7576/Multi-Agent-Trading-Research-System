@@ -24,6 +24,7 @@ TABLE_KEYS: dict[str, list[str]] = {
     "corporate_events": ["ticker", "ex_date"],
     "psx_results": ["announcement_id"],
     "company_profiles": ["symbol", "snapshot_date"],
+    "news": ["doc_id", "symbol"],
 }
 
 

@@ -112,6 +112,17 @@ class PITStore:
         """
         return self._con.execute(sql, {"as_of": as_of}).df()
 
+    def news(self, market: str, as_of: pd.Timestamp, symbols: list[str] | None = None) -> pd.DataFrame:
+        """News linked to companies, published by ``as_of``."""
+        as_of = self._check(as_of)
+        params: dict[str, object] = {"as_of": as_of}
+        where = "known_at <= $as_of"
+        if symbols is not None:
+            where += " AND list_contains($symbols, symbol)"
+            params["symbols"] = list(symbols)
+        sql = f"SELECT * FROM {self._src('news', market)} WHERE {where} ORDER BY known_at"
+        return self._con.execute(sql, params).df()
+
     def index_constituents(self, market: str, index: str, as_of: pd.Timestamp) -> pd.DataFrame:
         """The latest constituent snapshot of ``index`` fetched on or before ``as_of``."""
         as_of = self._check(as_of)

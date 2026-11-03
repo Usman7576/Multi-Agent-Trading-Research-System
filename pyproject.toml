@@ -27,6 +27,8 @@ dependencies = [
     "matplotlib>=3.11.2",
     "pdfplumber>=0.11.10",
     "pypdfium2>=5.14.0",
+    "qdrant-client>=1.20.0",
+    "rank-bm25>=0.2.2",
 ]
 
 [project.optional-dependencies]
@@ -34,8 +36,12 @@ ocr = [
     "rapidocr-onnxruntime>=1.4.4",
 ]
 llm = [
-    "huggingface-hub>=2.4.0",
+    "huggingface-hub>=0.20",
     "llama-cpp-python>=0.3.36",
+]
+rag = [
+    "fastembed>=0.7",
+    "pysentiment2>=0.1.1",
 ]
 
 [dependency-groups]
@@ -88,3 +94,4 @@ known-first-party = ["tra", "tests"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/test_psx_financials.py" = ["E501"]  # statement text used as fixtures
+"tests/test_news.py" = ["E501"]  # feed text used as fixtures
