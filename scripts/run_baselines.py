@@ -75,8 +75,8 @@ MARKETS = {
         "benchmark": "the KSE-100 index",
         "universe": "the 60 most liquid PSX stocks each day (point-in-time, delisted names included)",
         "fundamentals_missing": "PSX fundamentals come from results PDFs (OCR + rules, LLM fallback). "
-        "Extraction is not reliable yet (see `psx_report_extraction.md`), so this run uses price and "
-        "liquidity features only.",
+        "Extraction covers about half of reports (see `psx_report_extraction.md`), so this run uses price "
+        "and liquidity features only.",
         "survivorship": "the universe is rebuilt every day from data known that day and includes stocks "
         "that were later delisted, so there is no survivorship bias from today's index membership. "
         "Sectors come from today's symbol list, so delisted stocks are tagged 'Unknown'.",

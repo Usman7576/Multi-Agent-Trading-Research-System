@@ -1,35 +1,48 @@
-# PSX results-PDF extraction: sample stats
+# PSX results-PDF extraction: measured accuracy
 
-Measured 2026-11-03. **Status: not reliable yet. These figures are not used in any backtest.**
+Measured 2026-11-04 with rules frozen at commit `f79f815`, rules only (no LLM).
+**Status: when it answers, it is usually right, but it answers on only about half of reports. Extracted figures are
+not used in any backtest yet.**
 
-Sample: results announcements dated 2026 for 20 large KSE-100 companies. The run selected 70 announcements and
-stopped after 50 when a PDF download failed on a network error, so 6 companies (OGDC, PPL, PSO, SEARL, SYS, UBL)
-are not covered.
+## How it is scored
 
-| Measure | Count |
-|---|---|
-| Announcements processed | 50 |
-| Board-meeting notices wrongly selected as results (contain no figures; all failed) | 10 |
-| Real results reports | 40 (33 OCR, 7 text PDFs) |
-| Passed the checks ("usable") | 21 of 40 (52.5%): 20 by rules, 1 by LLM fallback |
-| Failed (incomplete or inconsistent, never used) | 19 of 40 |
-| Usable but with a whole-number EPS, very likely a statement note number (e.g. MCB 36, BAHL 35, MEBL 34) | 8 of 21 |
-| Usable but implying fewer than 10M shares, a likely missed unit (ENGROH, ILP) | 2 of 21 |
-| Usable and not visibly wrong | 11 of 40 (27.5%) |
-| Local LLM runs on real reports / failures it rescued | 20 / 1 |
+Each company page lists its real share count, so profit after tax / EPS must come close to it (within 25%). A wrong
+profit, EPS or unit shows up as a bad ratio. Correct reports usually land at 1.00. This test does not cover revenue or
+period length, and it uses today's share count, so it is weaker for older reports (bonus issues change the count).
 
-**The 11 are not verified as correct.** No report was hand-checked except one LUCK report, and the only test is
-that nothing looks implausible. Treat 27.5% as an upper bound on accuracy for this sample.
+Reproduce with `scripts/eval_report_extraction.py`.
 
-## What this shows
+## Results
 
-- The accounting checks are too weak: most usable filings could not be tested at all (13 of 21 lacked the figures
-  for the PBT - tax = PAT check), so "passed" often only means "profit and EPS were found".
-- The local Qwen2.5-3B model is not a useful fallback here, rescuing 1 of 20 reports at about 40 s each.
+| Set | Reports | Correct | Flagged wrong | No result |
+|---|---|---|---|---|
+| Old rules, tuning set | 60 | 14 (23%) | 22 | 24 |
+| New rules, tuning set (not an honest score: rules were fixed on these) | 60 | 54 (90%) | 4 | 2 |
+| **Held-out A: random 2026 reports from 31 companies never looked at** | **40** | **22 (55%)** | **0** | **18** |
+| **Held-out B: random 2019-2023 reports from those unseen companies** | **20** | **9 (45%)** | **3** | **8** |
 
-## Known bugs to fix before re-running
+Use the held-out rows, not the 90%. The gap between 90% and 55% shows how much the rules were fitted to the tuning set.
 
-1. Board-meeting notices match the results-title filter.
-2. EPS extraction takes the first number on the line, which can be the statement's note column.
-3. Units are missed when the unit line is not recognised, so figures are scaled wrongly.
-4. A failed PDF download stops the whole run instead of skipping that report.
+**Visual check:** 8 random reports scored correct in held-out A were compared with their page images, and all 8 match
+on profit, EPS, unit and period length. This was checked by Claude, not by a person.
+
+## What this means
+
+- **Mostly silent failures:** in held-out A nothing was flagged wrong, so 22 of 22 answers passed. With a sample that
+  small, the true error rate could still be up to about 13%.
+- **Coverage is the main problem:** most no-result reports had no EPS found. The causes in the held-out sets have
+  not been examined, so that the sets stay usable for one more honest comparison.
+- **Older reports are harder:** of the 3 flagged in set B, BOP is a wrong unit (implied shares 800x too many). HINOON
+  and PTC may be wrong or may reflect changed share counts; not checked.
+
+## Changes that produced this
+
+Board-meeting notices excluded; a failed download skips one report; note numbers no longer read as EPS; digits split by
+PDF text rejoined; figures anchored on the EPS line, so they come from one statement; units from the nearest header;
+period length from the first column; OCR for scanned pages inside text PDFs; OCR rows grouped by position.
+
+## Known remaining issues
+
+- ENGROH reports EPS by continuing and discontinued operations, and the continuing line is read as total EPS (flagged wrong).
+- A single-digit note before a figure can still be merged by mistake when the next column is similar in size (SYS, tuning set).
+- The local Qwen2.5-3B fallback was not re-tested on the new rules. Earlier it rescued 1 of 20 reports, so it is off by default.
