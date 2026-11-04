@@ -117,8 +117,9 @@ def main() -> None:
     lines += [
         "**Limits.** Claude wrote and labelled these questions after reading the documents; no independent "
         "person checked them. A question written from a document tends to share its words, favouring "
-        "BM25. Gold labels list the documents found to answer each question, not all that might, so "
-        "Recall can understate. Choosing the best mode on this set makes its number optimistic.",
+        "BM25. Gold labels list the documents found to answer each question, not all that might, and a "
+        "correct document nobody judged counts as wrong, so Recall can understate. Choosing the best mode "
+        "on this set makes its number optimistic.",
         "",
     ]
     REPORT.write_text("\n".join(lines), encoding="utf-8")
