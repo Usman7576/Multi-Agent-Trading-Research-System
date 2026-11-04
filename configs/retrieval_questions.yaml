@@ -1,0 +1,65 @@
+# Labelled retrieval questions. Written and labelled by Claude after reading the documents; not checked by a
+# person. kind: company (search limited to one company), open (whole market, company usually not named),
+# time (the answer depends on the as_of date). gold lists announcement ids. After a first run, the top
+# documents from every mode were judged and correct ones added (pooling); judged from short snippets.
+questions:
+  - {id: c01, kind: company, symbol: OGDC, as_of: 2026-01-10, question: "Was gas found at a new exploration well in Kohat?", gold: [268175]}
+  - {id: c02, kind: company, symbol: GHNI, as_of: 2025-12-05, question: "Partnership with a Chinese bus manufacturer", gold: [266557]}
+  - {id: c03, kind: company, symbol: SNGP, as_of: 2026-07-20, question: "Clarification of a newspaper report about accounting standards", gold: [279802]}
+  - {id: c04, kind: company, symbol: SSGC, as_of: 2026-07-20, question: "Response to Dawn story on international accounting standards exemption", gold: [279808]}
+  - {id: c05, kind: company, symbol: NATF, as_of: 2025-08-30, question: "Selling its packaging investment A-1 Bags", gold: [257972]}
+  - {id: c06, kind: company, symbol: APL, as_of: 2025-05-01, question: "Electric vehicle charging agreement", gold: [252124]}
+  - {id: c07, kind: company, symbol: SRVI, as_of: 2026-02-01, question: "Joint venture with a Chinese shoe maker", gold: [268952]}
+  - {id: c08, kind: company, symbol: LCI, as_of: 2025-05-30, question: "Reducing the face value of shares", gold: [253738]}
+  - {id: c09, kind: company, symbol: AKBL, as_of: 2025-08-30, question: "Early redemption of term finance certificates", gold: [257781, 256200]}
+  - {id: c10, kind: company, symbol: PSO, as_of: 2025-03-05, question: "Trading company with the Azerbaijan state oil firm", gold: [248066]}
+  - {id: c11, kind: company, symbol: BML, as_of: 2025-12-01, question: "Sponsor proposes changing his shareholding in the bank", gold: [265945]}
+  - {id: c12, kind: company, symbol: PIBTL, as_of: 2025-12-30, question: "New rights to export copper and gold through the port terminal", gold: [267227]}
+  - {id: c13, kind: company, symbol: AICL, as_of: 2025-07-01, question: "Selling part of its stake in the life insurance subsidiary", gold: [255378]}
+  - {id: c14, kind: company, symbol: PIOC, as_of: 2026-01-10, question: "Someone intends to buy shares and take control of the company", gold: [267430, PIOC-202511191037-e1f753b823, 265656]}
+  - {id: c15, kind: company, symbol: PAEL, as_of: 2026-08-20, question: "Faisalabad electricity distribution privatisation", gold: [280841]}
+  - {id: c16, kind: company, symbol: AHCL, as_of: 2026-01-10, question: "Bidding for the national airline", gold: [267714, 232572, 256231, 265352]}
+  - {id: c17, kind: company, symbol: FABL, as_of: 2025-05-01, question: "Sponsor's talks with GFH ended", gold: [251180]}
+  - {id: c18, kind: company, symbol: SHFA, as_of: 2025-03-10, question: "Scheme of arrangement approved by the board", gold: [248301]}
+  - {id: c19, kind: company, symbol: POL, as_of: 2025-09-01, question: "Gas field development project commissioned in Balochistan", gold: [257872]}
+  - {id: c20, kind: company, symbol: ISL, as_of: 2025-05-30, question: "Solar project at the factory now running", gold: [253630]}
+  - {id: c21, kind: company, symbol: UPFL, as_of: 2026-04-20, question: "Parent combining its global foods business with McCormick", gold: [273395]}
+  - {id: c22, kind: company, symbol: NESTLE, as_of: 2026-08-01, question: "Water business deal with a private equity firm", gold: [280248]}
+  - {id: c23, kind: company, symbol: FATIMA, as_of: 2026-04-10, question: "Pressure enhancement project at the Mari gas field", gold: [272876]}
+  - {id: c24, kind: company, symbol: SEARL, as_of: 2026-05-30, question: "Renaming the Nextar subsidiary", gold: [277031]}
+  - {id: c25, kind: company, symbol: HBL, as_of: 2026-02-20, question: "Deferred bonus for senior management", gold: [269881]}
+  - {id: c26, kind: company, symbol: HCAR, as_of: 2026-10-15, question: "Stopped making a car model", gold: [284160]}
+  - {id: c27, kind: company, symbol: NBP, as_of: 2026-10-01, question: "Court judgment on pensions", gold: [282898]}
+  - {id: c28, kind: company, symbol: EFERT, as_of: 2026-10-01, question: "Did the plant restart after the shutdown?", gold: [283091]}
+  - {id: c29, kind: company, symbol: DGKC, as_of: 2026-10-05, question: "Agreement with Sungrow", gold: [283289]}
+  - {id: c30, kind: company, symbol: CNERGY, as_of: 2026-10-05, question: "Refinery upgrade agreement with the government", gold: [283348]}
+  - {id: c31, kind: company, symbol: ATRL, as_of: 2026-10-05, question: "Refinery upgrade agreement signed", gold: [283339]}
+  - {id: c32, kind: company, symbol: FCCL, as_of: 2026-10-05, question: "Battery storage and solar at the plants", gold: [283157]}
+  - {id: c33, kind: company, symbol: FCCL, as_of: 2026-08-20, question: "Final cash dividend for the year ended June 2026", gold: [281026]}
+  - {id: c34, kind: company, symbol: SAZEW, as_of: 2026-10-05, question: "New electric vehicle brand coming to Pakistan", gold: [283434]}
+  - {id: c35, kind: company, symbol: COLG, as_of: 2026-11-01, question: "Purchase of the Procter & Gamble plant at Port Qasim", gold: [287248, 277242]}
+  - {id: c36, kind: company, symbol: CPHL, as_of: 2026-10-25, question: "Competition regulator approval for the acquisition", gold: [285929]}
+  - {id: c37, kind: company, symbol: ISL, as_of: 2026-10-30, question: "Change of registered office address", gold: [286194]}
+  - {id: c38, kind: company, symbol: ILP, as_of: 2026-10-30, question: "Capital spending budget for apparel and hosiery", gold: [286607]}
+  - {id: c39, kind: company, symbol: HALEON, as_of: 2026-11-01, question: "Manufacturing Panadol at its own factory", gold: [287821]}
+  - {id: c40, kind: company, symbol: GAL, as_of: 2026-09-30, question: "Expanding the paint shop", gold: [282910]}
+  - {id: o01, kind: open, as_of: 2026-11-01, question: "Which companies formed a consortium with Hub Power Holdings and Lucky Cement to buy a stake?", gold: [287015, 284989, 285032, 287075, 285011, 287054, 281942, 281954, 281977, 256223, 256221, 256222]}
+  - {id: o02, kind: open, as_of: 2026-01-10, question: "Listed companies bidding in the privatisation of Pakistan International Airlines", gold: [267714, 256231, 265352, 232572, 267715, 256234]}
+  - {id: o03, kind: open, as_of: 2026-07-20, question: "Gas utilities respond to news on exemption from international accounting standards", gold: [279802, 279808]}
+  - {id: o04, kind: open, as_of: 2026-10-05, question: "Refineries signing upgrade agreements with the government", gold: [283348, 283339]}
+  - {id: o05, kind: open, as_of: 2026-04-20, question: "Global parent selling its foods business to McCormick", gold: [273395]}
+  - {id: o06, kind: open, as_of: 2026-01-10, question: "Gas discovery at an exploratory well in Khyber Pakhtunkhwa", gold: [268175, 268136, 268084, 172644, 267072]}
+  - {id: o07, kind: open, as_of: 2026-10-05, question: "Cement producer adding battery energy storage with a solar plant", gold: [283157, 268821]}
+  - {id: o08, kind: open, as_of: 2025-05-01, question: "Partnership to build electric vehicle charging stations", gold: [252124]}
+  - {id: o09, kind: open, as_of: 2026-10-05, question: "Carmaker introducing a new energy vehicle brand", gold: [283434]}
+  - {id: o10, kind: open, as_of: 2026-10-30, question: "Company name changed to Noventra", gold: [284637, 281993]}
+  - {id: o11, kind: open, as_of: 2026-10-01, question: "Bank loses appeal in pensioners case", gold: [282898]}
+  - {id: o12, kind: open, as_of: 2026-10-15, question: "Automaker discontinues production of a model", gold: [284160]}
+  - {id: o13, kind: open, as_of: 2026-10-05, question: "Share split from Rs 5 to Rs 1 face value", gold: [282982]}
+  - {id: o14, kind: open, as_of: 2026-10-05, question: "Companies signing with EBR Energy and Sungrow", gold: [283289, 283286]}
+  - {id: o15, kind: open, as_of: 2026-11-01, question: "Buying land and a factory from Procter & Gamble", gold: [287248, 277242]}
+  - {id: o16, kind: open, as_of: 2026-11-01, question: "Pharmaceutical company acquiring Pakheim International", gold: [285929, 287790, 276778]}
+  - {id: o17, kind: open, as_of: 2026-10-05, question: "Fertilizer plant resumes operations", gold: [283091]}
+  - {id: o18, kind: open, as_of: 2026-02-01, question: "Footwear joint venture with a Chinese company", gold: [268952]}
+  - {id: t01, kind: time, as_of: 2025-08-01, question: "Consortium of Hub Power, Lucky Cement and Kohat Cement", gold: [256223, 256221, 256222]}
+  - {id: t02, kind: time, as_of: 2025-07-31, symbol: LOTCHEM, question: "Acquisition of shares by PTA Global Holding", gold: [256163]}

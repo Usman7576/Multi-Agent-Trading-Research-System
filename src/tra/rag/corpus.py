@@ -21,6 +21,8 @@ WINDOW_WORDS = 220
 OVERLAP_WORDS = 40
 # Routine notices that would crowd search results without saying anything about the business
 NOISE_TITLES = re.compile(r"disclosure of interest|transmission of|notice of|credit of|book closure", re.I)
+# Titles that only repeat the company name, e.g. "KOHC | Kohat Cement Company Limited"
+EMPTY_TITLE = re.compile(r"^[A-Z0-9-]+ \| [^-]*(?:Limited|Ltd\.?)$")
 COLUMNS = ["chunk_id", "doc_id", "symbol", "doc_type", "title", "text", "known_at", "url"]
 _GLUED = re.compile(r"(?<=[a-z])(?=[A-Z])|(?<=[a-z])(?=\d)|(?<=\d)(?!(?:st|nd|rd|th)\b)(?=[a-z]{2})")
 
@@ -49,6 +51,8 @@ def announcement_chunks(announcements: pd.DataFrame, raw_dir: Path, since: str) 
         if NOISE_TITLES.search(a.title):
             continue
         doc = str(a.announcement_id)
+        if EMPTY_TITLE.match(a.title) and not (raw_dir / "reports" / a.symbol / f"{doc}.text.json").exists():
+            continue
         cache = raw_dir / "reports" / a.symbol / f"{doc}.text.json"
         text = json.loads(cache.read_text(encoding="utf-8"))["text"] if cache.exists() else ""
         parts = split_words(unglue(text)) or [a.title]

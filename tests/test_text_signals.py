@@ -4,7 +4,7 @@ import pytest
 
 from tra.config import load_experiment
 from tra.features.text import text_features
-from tra.llm.extract import HeadlineSignal, mask, quote_verified
+from tra.llm.extract import HeadlineSignal, filing_body, mask, quote_verified
 
 DAYS = pd.bdate_range("2024-01-01", periods=60)
 CLOSES = pd.Series(DAYS.tz_localize("UTC") + pd.Timedelta(hours=12), index=DAYS)
@@ -100,3 +100,13 @@ def test_adding_text_setting_leaves_existing_config_hashes_unchanged():
     assert base.model.text_features is None
     assert base.config_hash() == "0054d620c535"
     assert load_experiment("psx_b5_text_llm").config_hash() != base.config_hash()
+
+
+def test_quote_check_ignores_spaces_lost_in_pdf_text():
+    signal = HeadlineSignal(sentiment=0.5, event="expansion", key_quote="Plant resumed operations")
+    assert quote_verified(signal, "the Plantresumed operations on Monday")
+
+
+def test_filing_body_skips_the_letterhead():
+    text = "ACME LIMITED Karachi The General Manager PSX Dear Sir, we convey the following information: Plant resumed."
+    assert filing_body(text) == "Plant resumed."

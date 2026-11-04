@@ -155,3 +155,17 @@ def test_retrieval_metrics_by_hand():
 def test_unglue_restores_spaces_lost_in_pdfs():
     assert unglue("Sections96and131 ofTheAct") == "Sections 96 and 131 of The Act"
     assert unglue("Rs.5 Q3 2026 30th PSX") == "Rs.5 Q3 2026 30th PSX"
+
+
+def test_empty_titles_are_dropped_unless_their_text_was_read(tmp_path):
+    ann = pd.DataFrame(
+        {
+            "announcement_id": ["a", "b"],
+            "symbol": ["KOHC", "KOHC"],
+            "title": ["KOHC | Kohat Cement Company Limited", "KOHC | Kohat Cement - Right Issue"],
+            "known_at": pd.Timestamp("2024-01-02", tz="UTC"),
+            "announced_local": pd.Timestamp("2024-01-02"),
+            "doc_path": None,
+        }
+    )
+    assert [r["doc_id"] for r in announcement_chunks(ann, tmp_path, "2020-01-01")] == ["b"]

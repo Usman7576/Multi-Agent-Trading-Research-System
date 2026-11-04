@@ -24,6 +24,7 @@ MODES = ["bm25", "dense", "hybrid", "rerank"]
 QUESTIONS = REPO_ROOT / "configs" / "retrieval_questions.yaml"
 REPORT = REPO_ROOT / "reports" / "psx_retrieval_eval.md"
 POOL = 40
+POOL_FILE = REPO_ROOT / "data" / "retrieval_pool.txt"
 
 
 def evaluate(
@@ -39,6 +40,7 @@ def evaluate(
             {
                 "id": q["id"],
                 "kind": q["kind"],
+                "top": ranked[:5],
                 "recall_5": recall_at_k(ranked, gold, 5),
                 "recall_10": recall_at_k(ranked, gold, 10),
                 "mrr": reciprocal_rank(ranked, gold),
@@ -54,6 +56,20 @@ def evaluate(
 def kind_table(kinds: pd.DataFrame) -> list[str]:
     out = ["| type | " + " | ".join(kinds.columns) + " |", "|---" * (len(kinds.columns) + 1) + "|"]
     return out + [f"| {k} | " + " | ".join(f"{v:.3f}" for v in r) + " |" for k, r in kinds.iterrows()]
+
+
+def write_pool(chunks: pd.DataFrame, questions: list[dict], details: dict[str, list[dict]]) -> None:
+    """Top documents from every mode that are not yet gold, to be judged: TREC-style pooling."""
+    first = chunks.drop_duplicates("doc_id").set_index("doc_id")
+    lines = []
+    for n, q in enumerate(questions):
+        gold = {str(d) for d in q["gold"]}
+        pool = dict.fromkeys(d for m in MODES for d in details[m][n]["top"] if d not in gold)
+        lines.append(f"## {q['id']} [{q.get('symbol', '-')}] {q['question']}")
+        for d in pool:
+            r = first.loc[d]
+            lines.append(f"{d}|{r['symbol']}|{str(r['known_at'])[:10]}|{r['title'][:50]}|{r['text'][:170]!r}")
+    POOL_FILE.write_text(chr(10).join(lines), encoding="utf-8")
 
 
 def main() -> None:
@@ -77,6 +93,7 @@ def main() -> None:
         summaries[mode], details[mode] = evaluate(retriever, questions, mode)
         log.info("%s: %s", mode, summaries[mode])
     retriever.close()
+    write_pool(chunks, questions, details)
     table = pd.DataFrame(summaries).T
     kinds = pd.DataFrame(
         {m: pd.DataFrame(details[m]).groupby("kind")["recall_5"].mean() for m in MODES}
