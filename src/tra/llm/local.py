@@ -41,6 +41,10 @@ class LLMError(RuntimeError):
     pass
 
 
+class LLMCrash(LLMError):
+    """llama.cpp itself failed, often from low memory: says nothing about the text, so worth retrying."""
+
+
 class LocalLLM:
     def __init__(
         self,
@@ -90,7 +94,7 @@ class LocalLLM:
                     response_format={"type": "json_object", "schema": schema.model_json_schema()},
                 )
             except OSError as exc:  # A C++ exception inside llama.cpp reaches Python as OSError on Windows
-                raise LLMError(f"{schema.__name__}: llama.cpp failed: {exc}") from exc
+                raise LLMCrash(f"{schema.__name__}: llama.cpp failed: {exc}") from exc
             text = out["choices"][0]["message"]["content"] or ""
             try:
                 parsed = schema.model_validate_json(text)

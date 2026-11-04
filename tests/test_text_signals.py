@@ -6,8 +6,9 @@ import pytest
 
 from tra.config import load_experiment
 from tra.features.text import text_features
+from tra.llm import extract
 from tra.llm.extract import HeadlineSignal, filing_body, mask, quote_verified
-from tra.llm.local import LLMError, LocalLLM
+from tra.llm.local import LLMCrash, LLMError, LocalLLM
 
 DAYS = pd.bdate_range("2024-01-01", periods=60)
 CLOSES = pd.Series(DAYS.tz_localize("UTC") + pd.Timedelta(hours=12), index=DAYS)
@@ -110,7 +111,7 @@ def test_quote_check_ignores_spaces_lost_in_pdf_text():
     assert quote_verified(signal, "the Plantresumed operations on Monday")
 
 
-def test_llama_cpp_crash_fails_one_text_not_the_whole_run():
+def test_llama_cpp_crash_is_reported_as_a_crash():
     class Crashing:
         def create_chat_completion(self, **_):
             raise OSError("Windows Error 0xe06d7363")
@@ -119,8 +120,46 @@ def test_llama_cpp_crash_fails_one_text_not_the_whole_run():
     llm.model_name, llm._llm, llm._temperature = "m", Crashing(), 0.0
     llm._cache = sqlite3.connect(":memory:")
     llm._cache.execute("CREATE TABLE llm_cache (key TEXT PRIMARY KEY, response TEXT)")
-    with pytest.raises(LLMError):
+    with pytest.raises(LLMCrash):
         llm.extract(HeadlineSignal, "system", "user", "v")
+
+
+class _ScriptedLLM:
+    def __init__(self, results):
+        self.results = iter(results)
+
+    def extract(self, *_):
+        result = next(self.results)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+
+def _run_scoring(monkeypatch, results):
+    saved = []
+    monkeypatch.setattr(extract, "_merge", lambda _, rows: saved.extend(rows))
+    todo = pd.DataFrame(
+        {
+            "doc_id": [f"d{i}" for i in range(len(results))],
+            "symbol": "LUCK",
+            "known_at": DAYS[0],
+            "title": "profit jumps",
+        }
+    )
+    extract._score_rows(None, todo, {}, _ScriptedLLM(results))
+    return {r["doc_id"]: r["llm_status"] for r in saved}
+
+
+def test_crashed_text_stays_unscored_but_bad_output_is_recorded(monkeypatch):
+    good = HeadlineSignal(sentiment=0.5, event="earnings", key_quote="profit jumps")
+    statuses = _run_scoring(monkeypatch, [good, LLMCrash("x"), LLMError("y"), good])
+    assert statuses == {"d0": "ok", "d2": "invalid", "d3": "ok"}
+
+
+def test_repeated_crashes_stop_the_run_and_keep_earlier_scores(monkeypatch):
+    good = HeadlineSignal(sentiment=0.5, event="earnings", key_quote="profit jumps")
+    crash = LLMCrash("x")
+    assert _run_scoring(monkeypatch, [good, crash, crash, crash, good]) == {"d0": "ok"}
 
 
 def test_filing_body_skips_the_letterhead():

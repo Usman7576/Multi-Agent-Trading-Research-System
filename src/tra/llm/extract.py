@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 from tra.config import Settings
 from tra.data.lake import ParquetLake
-from tra.llm.local import DEFAULT_MODEL, LLMError, LocalLLM
+from tra.llm.local import DEFAULT_MODEL, LLMCrash, LLMError, LocalLLM
 from tra.rag.corpus import unglue
 from tra.scrapers.news.run import company_names
 from tra.scrapers.news.sources import company_search_name
@@ -31,6 +31,7 @@ log = logging.getLogger(__name__)
 MARKET = "PSX"
 PROMPT_VERSION = "text-v2"
 FILING_WORDS = 220
+MAX_CRASHES = 3
 SYSTEM = (
     "You score one news headline or company filing from the Pakistan Stock Exchange for what it "
     "means for that company's share price. sentiment runs from -1 (clearly bad) through 0 (neutral or "
@@ -134,7 +135,13 @@ def score_texts(
     tried = done["llm_status"].notna() if "llm_status" in done else pd.Series(False, index=done.index)
     todo = done[~scored & ~tried].sort_values("known_at", ascending=False)
     todo = todo.head(limit) if limit else todo
-    rows, started = [], time.monotonic()
+    _score_rows(lake, todo, names, llm)
+    return lake.read("news_signals", MARKET)
+
+
+def _score_rows(lake: ParquetLake, todo: pd.DataFrame, names: dict[str, str], llm: LocalLLM) -> None:
+    """Score and save in batches. A crash leaves the text unscored for the next run; repeats end this one."""
+    rows, crashes, started = [], 0, time.monotonic()
     for n, a in enumerate(todo.itertuples(index=False), start=1):
         masked = mask(a.title, a.symbol, names.get(a.symbol, a.symbol))
         rec = {"doc_id": a.doc_id, "symbol": a.symbol, "llm_sentiment": None, "llm_event": None}
@@ -144,14 +151,23 @@ def score_texts(
                 rec.update(llm_sentiment=signal.sentiment, llm_event=signal.event, llm_status="ok")
             else:
                 rec["llm_status"] = "quote_failed"
+            rows.append(rec)
+            crashes = 0
+        except LLMCrash as exc:
+            crashes += 1
+            log.warning("Text %s left for the next run: %s", a.doc_id, exc)
+            if crashes == MAX_CRASHES:
+                log.error("Stopping after %d crashes in a row", crashes)
+                break
         except LLMError:
             rec["llm_status"] = "invalid"
-        rows.append(rec)
-        if n % 100 == 0 or n == len(todo):
+            rows.append(rec)
+        if rows and (n % 100 == 0 or n == len(todo)):
             _merge(lake, rows)
             rows = []
             log.info("Scored %d of %d texts (%.1f s each)", n, len(todo), (time.monotonic() - started) / n)
-    return lake.read("news_signals", MARKET)
+    if rows:
+        _merge(lake, rows)
 
 
 def _merge(lake: ParquetLake, rows: list[dict[str, object]]) -> None:
