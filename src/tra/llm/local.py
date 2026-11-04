@@ -83,11 +83,14 @@ class LocalLLM:
 
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         for attempt in range(2):
-            out = self._llm.create_chat_completion(
-                messages=messages,
-                temperature=self._temperature,
-                response_format={"type": "json_object", "schema": schema.model_json_schema()},
-            )
+            try:
+                out = self._llm.create_chat_completion(
+                    messages=messages,
+                    temperature=self._temperature,
+                    response_format={"type": "json_object", "schema": schema.model_json_schema()},
+                )
+            except OSError as exc:  # A C++ exception inside llama.cpp reaches Python as OSError on Windows
+                raise LLMError(f"{schema.__name__}: llama.cpp failed: {exc}") from exc
             text = out["choices"][0]["message"]["content"] or ""
             try:
                 parsed = schema.model_validate_json(text)

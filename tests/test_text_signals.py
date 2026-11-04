@@ -1,3 +1,5 @@
+import sqlite3
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,6 +7,7 @@ import pytest
 from tra.config import load_experiment
 from tra.features.text import text_features
 from tra.llm.extract import HeadlineSignal, filing_body, mask, quote_verified
+from tra.llm.local import LLMError, LocalLLM
 
 DAYS = pd.bdate_range("2024-01-01", periods=60)
 CLOSES = pd.Series(DAYS.tz_localize("UTC") + pd.Timedelta(hours=12), index=DAYS)
@@ -105,6 +108,19 @@ def test_adding_text_setting_leaves_existing_config_hashes_unchanged():
 def test_quote_check_ignores_spaces_lost_in_pdf_text():
     signal = HeadlineSignal(sentiment=0.5, event="expansion", key_quote="Plant resumed operations")
     assert quote_verified(signal, "the Plantresumed operations on Monday")
+
+
+def test_llama_cpp_crash_fails_one_text_not_the_whole_run():
+    class Crashing:
+        def create_chat_completion(self, **_):
+            raise OSError("Windows Error 0xe06d7363")
+
+    llm = LocalLLM.__new__(LocalLLM)
+    llm.model_name, llm._llm, llm._temperature = "m", Crashing(), 0.0
+    llm._cache = sqlite3.connect(":memory:")
+    llm._cache.execute("CREATE TABLE llm_cache (key TEXT PRIMARY KEY, response TEXT)")
+    with pytest.raises(LLMError):
+        llm.extract(HeadlineSignal, "system", "user", "v")
 
 
 def test_filing_body_skips_the_letterhead():
