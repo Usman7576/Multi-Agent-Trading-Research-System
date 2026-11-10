@@ -56,18 +56,17 @@ class LocalLLM:
         seed: int = 7,
     ) -> None:
         _register_msvc_runtime()
-        from llama_cpp import Llama
-
         if not model_path.exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
         self.model_name = model_path.name
-        self._llm = Llama(
-            model_path=str(model_path),
-            n_ctx=n_ctx,
-            n_threads=n_threads or max(1, (os.cpu_count() or 2) - 1),
-            seed=seed,
-            verbose=False,
-        )
+        self._settings = {
+            "model_path": str(model_path),
+            "n_ctx": n_ctx,
+            "n_threads": n_threads or max(1, (os.cpu_count() or 2) - 1),
+            "seed": seed,
+            "verbose": False,
+        }
+        self._llm = self._load()
         self._temperature = temperature
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         self._cache = sqlite3.connect(cache_path)
@@ -75,6 +74,29 @@ class LocalLLM:
             "CREATE TABLE IF NOT EXISTS llm_cache (key TEXT PRIMARY KEY, model TEXT, prompt_version TEXT, "
             "response TEXT, tokens_in INTEGER, tokens_out INTEGER)"
         )
+
+    def _load(self):
+        from llama_cpp import Llama
+
+        return Llama(**self._settings)
+
+    def _complete(self, schema: type[BaseModel], messages: list[dict[str, str]]) -> dict:
+        """One constrained completion. A llama.cpp crash can leave the context unusable for every later
+        call, so the model is loaded again and the text tried once more before giving up on it."""
+        for attempt in range(2):
+            try:
+                return self._llm.create_chat_completion(
+                    messages=messages,
+                    temperature=self._temperature,
+                    response_format={"type": "json_object", "schema": schema.model_json_schema()},
+                )
+            except OSError as exc:  # A C++ exception inside llama.cpp reaches Python as OSError on Windows
+                log.warning("llama.cpp failed (%s); reloading the model", exc)
+                getattr(self._llm, "close", lambda: None)()  # free the old one first: memory is tight
+                self._llm = self._load()
+                if attempt == 1:
+                    raise LLMCrash(f"{schema.__name__}: llama.cpp failed: {exc}") from exc
+        raise LLMError("unreachable")
 
     def extract(self, schema: type[T], system: str, user: str, prompt_version: str) -> T:
         """Return a validated ``schema`` instance, or raise LLMError after one repair attempt."""
@@ -87,14 +109,7 @@ class LocalLLM:
 
         messages = [{"role": "system", "content": system}, {"role": "user", "content": user}]
         for attempt in range(2):
-            try:
-                out = self._llm.create_chat_completion(
-                    messages=messages,
-                    temperature=self._temperature,
-                    response_format={"type": "json_object", "schema": schema.model_json_schema()},
-                )
-            except OSError as exc:  # A C++ exception inside llama.cpp reaches Python as OSError on Windows
-                raise LLMCrash(f"{schema.__name__}: llama.cpp failed: {exc}") from exc
+            out = self._complete(schema, messages)
             text = out["choices"][0]["message"]["content"] or ""
             try:
                 parsed = schema.model_validate_json(text)

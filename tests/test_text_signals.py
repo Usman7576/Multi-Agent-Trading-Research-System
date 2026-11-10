@@ -111,15 +111,39 @@ def test_quote_check_ignores_spaces_lost_in_pdf_text():
     assert quote_verified(signal, "the Plantresumed operations on Monday")
 
 
-def test_llama_cpp_crash_is_reported_as_a_crash():
-    class Crashing:
-        def create_chat_completion(self, **_):
-            raise OSError("Windows Error 0xe06d7363")
+class _Engine:
+    """Stands in for llama_cpp.Llama: crashes the first ``crashes`` calls across all loads."""
 
+    def __init__(self, state):
+        self.state = state
+        state["loads"] += 1
+
+    def create_chat_completion(self, **_):
+        if self.state["crashes"] > 0:
+            self.state["crashes"] -= 1
+            raise OSError("Windows Error 0xe06d7363")
+        reply = '{"sentiment": 0.5, "event": "earnings", "key_quote": "profit"}'
+        return {"choices": [{"message": {"content": reply}}]}
+
+
+def _llm_with_engine(monkeypatch, crashes):
+    state = {"loads": 0, "crashes": crashes}
+    monkeypatch.setattr(LocalLLM, "_load", lambda self: _Engine(state))
     llm = LocalLLM.__new__(LocalLLM)
-    llm.model_name, llm._llm, llm._temperature = "m", Crashing(), 0.0
+    llm.model_name, llm._temperature, llm._llm = "m", 0.0, LocalLLM._load(llm)
     llm._cache = sqlite3.connect(":memory:")
-    llm._cache.execute("CREATE TABLE llm_cache (key TEXT PRIMARY KEY, response TEXT)")
+    llm._cache.execute("CREATE TABLE llm_cache (key TEXT PRIMARY KEY, a, b, response TEXT, c, d)")
+    return llm, state
+
+
+def test_llama_cpp_crash_reloads_the_model_and_retries(monkeypatch):
+    llm, state = _llm_with_engine(monkeypatch, crashes=1)
+    assert llm.extract(HeadlineSignal, "system", "user", "v").sentiment == 0.5
+    assert state["loads"] == 2
+
+
+def test_llama_cpp_crash_twice_is_reported_as_a_crash(monkeypatch):
+    llm, _ = _llm_with_engine(monkeypatch, crashes=2)
     with pytest.raises(LLMCrash):
         llm.extract(HeadlineSignal, "system", "user", "v")
 
