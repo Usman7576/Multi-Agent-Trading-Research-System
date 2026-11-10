@@ -17,13 +17,21 @@ from tra.config import Settings
 from tra.data.lake import ParquetLake
 from tra.scrapers.common.http import HttpClient, HttpError
 from tra.scrapers.news.mapper import SymbolMapper
-from tra.scrapers.news.sources import RSS_FEEDS, company_search_name, fetch_gdelt, parse_gdelt, parse_rss
+from tra.scrapers.news.sources import (
+    RSS_FEEDS,
+    GdeltQueryRejected,
+    company_search_name,
+    fetch_gdelt,
+    parse_gdelt,
+    parse_rss,
+)
 from tra.scrapers.psx.client import USER_AGENT
 from tra.state import StateDB
 
 log = logging.getLogger(__name__)
 MARKET = "PSX"
 WATERMARK = "news_gdelt"
+UNSEARCHABLE = "unsearchable"
 
 
 def link_symbols(articles: pd.DataFrame, mapper: SymbolMapper) -> pd.DataFrame:
@@ -76,12 +84,17 @@ def collect_history(
         query = f'"{company_search_name(name)}" sourcecountry:pakistan'
         for year in range(first_year, last_year + 1):
             key = f"{symbol}:{year}"
-            if state.get_watermark(WATERMARK, key) == "done":
+            if state.get_watermark(WATERMARK, key) in ("done", UNSEARCHABLE):
                 continue
             start = pd.Timestamp(year=year, month=1, day=1)
             end = pd.Timestamp(year=year, month=12, day=31, hour=23, minute=59, second=59)
             try:
                 body = fetch_gdelt(http, query, start, end)
+            except GdeltQueryRejected as exc:  # the same for every year, and for every later run
+                log.warning("Skipping %s: %s", symbol, exc)
+                for later in range(year, last_year + 1):
+                    state.set_watermark(WATERMARK, f"{symbol}:{later}", UNSEARCHABLE)
+                break
             except HttpError as exc:  # no watermark, so the next run tries this year again
                 log.warning("GDELT %s failed: %s", key, exc)
                 continue

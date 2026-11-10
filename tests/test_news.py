@@ -8,9 +8,18 @@ from tra.data.lake import ParquetLake
 from tra.data.pit_store import PITStore
 from tra.scrapers.common.drift import DriftError
 from tra.scrapers.common.http import HttpError
+from tra.scrapers.news import run
 from tra.scrapers.news.mapper import SymbolMapper
 from tra.scrapers.news.run import link_symbols
-from tra.scrapers.news.sources import company_search_name, doc_id, fetch_gdelt, parse_gdelt, parse_rss
+from tra.scrapers.news.sources import (
+    GdeltQueryRejected,
+    company_search_name,
+    doc_id,
+    fetch_gdelt,
+    parse_gdelt,
+    parse_rss,
+)
+from tra.state import StateDB
 
 NOW = pd.Timestamp("2026-11-04 10:00", tz="UTC")
 RSS = b"""<?xml version="1.0"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel>
@@ -63,6 +72,31 @@ def test_gdelt_throttle_message_is_retried_then_fails():
     http.get_text.side_effect = ["Please limit"] * 2
     with pytest.raises(HttpError):
         fetch_gdelt(http, "q", start, end, attempts=2, wait=0)
+
+
+def test_gdelt_refusing_a_short_name_is_not_retried():
+    http = MagicMock()
+    http.get_text.return_value = "The specified phrase is too short."
+    start, end = pd.Timestamp("2022-01-01"), pd.Timestamp("2022-12-31")
+    with pytest.raises(GdeltQueryRejected):
+        fetch_gdelt(http, '"AGP"', start, end, wait=0)
+    assert http.get_text.call_count == 1
+
+
+def test_unsearchable_company_is_skipped_for_every_year_and_later_runs(tmp_path, monkeypatch):
+    calls = []
+
+    def refuse(_, query, *__):
+        calls.append(query)
+        raise GdeltQueryRejected("too short")
+
+    monkeypatch.setattr(run, "fetch_gdelt", refuse)
+    monkeypatch.setattr(run, "company_names", lambda *_: {"AGP": "AGP Limited"})
+    state = StateDB(tmp_path / "state.sqlite")
+    for _ in range(2):
+        run.collect_history(None, None, state, ["AGP"], 2019, 2021)
+    assert len(calls) == 1
+    assert state.get_watermark(run.WATERMARK, "AGP:2021") == run.UNSEARCHABLE
 
 
 @pytest.mark.parametrize(

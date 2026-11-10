@@ -102,6 +102,10 @@ def parse_gdelt(body: str, fetched_at: pd.Timestamp) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=COLUMNS)
 
 
+class GdeltQueryRejected(HttpError):
+    """GDELT refuses the query itself (a company name too short to search), so retrying cannot help."""
+
+
 def fetch_gdelt(
     http: HttpClient,
     query: str,
@@ -126,6 +130,8 @@ def fetch_gdelt(
             return body
         if not body.strip():
             return "{}"
+        if "too short" in body or "too common" in body:
+            raise GdeltQueryRejected(f"GDELT will never answer {query!r}: {body[:80].strip()}")
         log.warning("GDELT throttled or refused %r: %s", query, body[:80])
         time.sleep(wait)
     raise HttpError(f"GDELT refused {query!r} after {attempts} attempts")
