@@ -8,6 +8,7 @@ prompt hash), so re-running a pipeline costs nothing.
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import logging
@@ -52,6 +53,7 @@ class LocalLLM:
         cache_path: Path,
         n_ctx: int = 8192,
         n_threads: int | None = None,
+        n_batch: int = 128,
         temperature: float = 0.0,
         seed: int = 7,
     ) -> None:
@@ -62,6 +64,7 @@ class LocalLLM:
         self._settings = {
             "model_path": str(model_path),
             "n_ctx": n_ctx,
+            "n_batch": n_batch,  # llama-cpp-python keeps an n_batch x vocabulary float array: 297 MB at 512
             "n_threads": n_threads or max(1, (os.cpu_count() or 2) - 1),
             "seed": seed,
             "verbose": False,
@@ -93,6 +96,8 @@ class LocalLLM:
             except OSError as exc:  # A C++ exception inside llama.cpp reaches Python as OSError on Windows
                 log.warning("llama.cpp failed (%s); reloading the model", exc)
                 getattr(self._llm, "close", lambda: None)()  # free the old one first: memory is tight
+                self._llm = None
+                gc.collect()
                 self._llm = self._load()
                 if attempt == 1:
                     raise LLMCrash(f"{schema.__name__}: llama.cpp failed: {exc}") from exc
